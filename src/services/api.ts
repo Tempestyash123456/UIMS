@@ -1,334 +1,160 @@
-import { supabase, isSupabaseConfigured } from '../lib/supabase'
-import { 
-  Profile, 
-  CareerPath, 
-  QuizCategory, 
-  QuizQuestion, 
-  QuizAttempt, 
-  PeerQuestion, 
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import {
+  Profile,
+  CareerPath,
+  QuizCategory,
+  QuizQuestion,
+  QuizAttempt,
+  PeerQuestion,
   PeerAnswer,
   Event,
   EventSubscription,
   FAQ,
   ChatSession,
   ChatMessage,
-  DashboardStats 
-} from '../types'
+  DashboardStats,
+} from '../types';
+import toast from 'react-hot-toast';
 
-// Profile API
+const handleError = (error: any, context: string) => {
+  console.error(`Error in ${context}:`, error);
+  toast.error(`An error occurred in ${context}.`);
+  throw error;
+};
+
+// A generic function to fetch data from Supabase
+const fromSupabase = async (query: any, context: string) => {
+  if (!isSupabaseConfigured()) {
+    throw new Error('Supabase is not configured.');
+  }
+  const { data, error } = await query;
+  if (error) {
+    handleError(error, context);
+  }
+  return data;
+};
+
 export const profileApi = {
-  async getProfile(userId: string): Promise<Profile | null> {
-    if (!isSupabaseConfigured()) {
-      throw new Error('Supabase not configured')
-    }
+  getProfile: (userId: string) =>
+    fromSupabase(
+      supabase.from('profiles').select('*').eq('id', userId).single(),
+      'fetching profile'
+    ),
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
+  updateProfile: (userId: string, updates: Partial<Profile>) =>
+    fromSupabase(
+      supabase.from('profiles').update(updates).eq('id', userId),
+      'updating profile'
+    ),
+};
 
-    if (error && error.code !== 'PGRST116') {
-      throw error
-    }
-
-    return data
-  },
-
-  async updateProfile(userId: string, updates: Partial<Profile>): Promise<void> {
-    if (!isSupabaseConfigured()) {
-      throw new Error('Supabase not configured')
-    }
-
-    const { error } = await supabase
-      .from('profiles')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', userId)
-
-    if (error) throw error
-  }
-}
-
-// Career API
 export const careerApi = {
-  async getCareerPaths(): Promise<CareerPath[]> {
-    const { data, error } = await supabase
-      .from('career_paths')
-      .select('*')
-      .order('title')
+  getCareerPaths: (): Promise<CareerPath[]> =>
+    fromSupabase(supabase.from('career_paths').select('*'), 'fetching career paths'),
+};
 
-    if (error) throw error
-    return data || []
-  }
-}
-
-// Quiz API
 export const quizApi = {
-  async getCategories(): Promise<QuizCategory[]> {
-    const { data, error } = await supabase
-      .from('quiz_categories')
-      .select('*')
-      .order('name')
+  getCategories: (): Promise<QuizCategory[]> =>
+    fromSupabase(supabase.from('quiz_categories').select('*'), 'fetching quiz categories'),
 
-    if (error) throw error
-    return data || []
-  },
+  getQuestions: (categoryId: string): Promise<QuizQuestion[]> =>
+    fromSupabase(
+      supabase.from('quiz_questions').select('*').eq('category_id', categoryId),
+      'fetching quiz questions'
+    ),
 
-  async getQuestions(categoryId: string): Promise<QuizQuestion[]> {
-    const { data, error } = await supabase
-      .from('quiz_questions')
-      .select('*')
-      .eq('category_id', categoryId)
-      .order('difficulty_level')
+  saveAttempt: (attempt: Omit<QuizAttempt, 'id' | 'created_at'>) =>
+    fromSupabase(supabase.from('quiz_attempts').insert([attempt]), 'saving quiz attempt'),
 
-    if (error) throw error
-    return data || []
-  },
+  getUserAttempts: (userId: string): Promise<QuizAttempt[]> =>
+    fromSupabase(
+      supabase.from('quiz_attempts').select('*, quiz_categories(name)').eq('user_id', userId),
+      'fetching user attempts'
+    ),
+};
 
-  async saveAttempt(attempt: Omit<QuizAttempt, 'id' | 'created_at'>): Promise<void> {
-    const { error } = await supabase
-      .from('quiz_attempts')
-      .insert([attempt])
-
-    if (error) throw error
-  },
-
-  async getUserAttempts(userId: string): Promise<QuizAttempt[]> {
-    const { data, error } = await supabase
-      .from('quiz_attempts')
-      .select(`
-        *,
-        quiz_categories (name)
-      `)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-
-    if (error) throw error
-    return data || []
-  }
-}
-
-// Peer Support API
 export const peerApi = {
-  async getQuestions(): Promise<PeerQuestion[]> {
-    const { data, error } = await supabase
-      .from('peer_questions')
-      .select(`
-        *,
-        profiles (full_name, avatar_url)
-      `)
-      .order('created_at', { ascending: false })
+  getQuestions: (): Promise<PeerQuestion[]> =>
+    fromSupabase(
+      supabase.from('peer_questions').select('*, profiles(full_name)').order('created_at', { ascending: false }),
+      'fetching peer questions'
+    ),
+  createQuestion: (question: Partial<PeerQuestion>) =>
+    fromSupabase(supabase.from('peer_questions').insert([question]), 'creating peer question'),
+  getAnswers: (questionId: string): Promise<PeerAnswer[]> =>
+    fromSupabase(
+      supabase.from('peer_answers').select('*, profiles(full_name)').eq('question_id', questionId),
+      'fetching peer answers'
+    ),
+  createAnswer: (answer: Partial<PeerAnswer>) =>
+    fromSupabase(supabase.from('peer_answers').insert([answer]), 'creating peer answer'),
+  upvoteQuestion: (questionId: string) =>
+    fromSupabase(supabase.rpc('upvote_question', { question_id: questionId }), 'upvoting question'),
+};
 
-    if (error) throw error
-    return data || []
-  },
-
-  async createQuestion(question: Omit<PeerQuestion, 'id' | 'created_at' | 'updated_at' | 'is_answered' | 'upvotes' | 'profiles'>): Promise<void> {
-    const { error } = await supabase
-      .from('peer_questions')
-      .insert([question])
-
-    if (error) throw error
-  },
-
-  async getAnswers(questionId: string): Promise<PeerAnswer[]> {
-    const { data, error } = await supabase
-      .from('peer_answers')
-      .select(`
-        *,
-        profiles (full_name, avatar_url)
-      `)
-      .eq('question_id', questionId)
-      .order('created_at', { ascending: true })
-
-    if (error) throw error
-    return data || []
-  },
-
-  async createAnswer(answer: Omit<PeerAnswer, 'id' | 'created_at' | 'updated_at' | 'is_accepted' | 'upvotes' | 'profiles'>): Promise<void> {
-    const { error } = await supabase
-      .from('peer_answers')
-      .insert([answer])
-
-    if (error) throw error
-  },
-
-  async upvoteQuestion(questionId: string, currentUpvotes: number): Promise<void> {
-    const { error } = await supabase
-      .from('peer_questions')
-      .update({ upvotes: currentUpvotes + 1 })
-      .eq('id', questionId)
-
-    if (error) throw error
-  }
-}
-
-// Dashboard API
 export const dashboardApi = {
-  async getStats(userId: string): Promise<DashboardStats> {
-    const [quizAttempts, peerQuestions, eventSubs, chatSessions] = await Promise.all([
-      supabase.from('quiz_attempts').select('id').eq('user_id', userId),
-      supabase.from('peer_questions').select('id').eq('user_id', userId),
-      supabase.from('event_subscriptions').select('id').eq('user_id', userId),
-      supabase.from('chat_sessions').select('id').eq('user_id', userId)
-    ])
+  getStats: (userId: string): Promise<DashboardStats> =>
+    fromSupabase(supabase.rpc('get_dashboard_stats', { user_id: userId }), 'fetching dashboard stats'),
+  getRecentActivity: (userId: string): Promise<QuizAttempt[]> =>
+    fromSupabase(
+      supabase.from('quiz_attempts').select('*, quiz_categories(name)').eq('user_id', userId).limit(5),
+      'fetching recent activity'
+    ),
+};
 
-    return {
-      quizzesTaken: quizAttempts.data?.length || 0,
-      questionsAsked: peerQuestions.data?.length || 0,
-      eventsSubscribed: eventSubs.data?.length || 0,
-      chatSessions: chatSessions.data?.length || 0
-    }
-  },
-
-  async getRecentActivity(userId: string): Promise<QuizAttempt[]> {
-    const { data, error } = await supabase
-      .from('quiz_attempts')
-      .select(`
-        id,
-        score,
-        total_questions,
-        created_at,
-        quiz_categories (name)
-      `)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(3)
-
-    if (error) throw error
-    return data || []
-  }
-}
-// Events API
 export const eventsApi = {
-  async getEvents(): Promise<Event[]> {
-    const { data, error } = await supabase
-      .from('events')
-      .select('*')
-      .eq('is_active', true)
-      .order('date_time', { ascending: true })
+  getEvents: (): Promise<Event[]> =>
+    fromSupabase(supabase.from('events').select('*').order('date_time'), 'fetching events'),
+  subscribeToEvent: (eventId: string, userId: string) =>
+    fromSupabase(
+      supabase.from('event_subscriptions').insert([{ event_id: eventId, user_id: userId }]),
+      'subscribing to event'
+    ),
+  unsubscribeFromEvent: (subscriptionId: string) =>
+    fromSupabase(
+      supabase.from('event_subscriptions').delete().eq('id', subscriptionId),
+      'unsubscribing from event'
+    ),
+  getUserSubscriptions: (userId: string): Promise<EventSubscription[]> =>
+    fromSupabase(
+      supabase.from('event_subscriptions').select('*').eq('user_id', userId),
+      'fetching user subscriptions'
+    ),
+};
 
-    if (error) throw error
-    return data || []
-  },
-
-  async subscribeToEvent(eventId: string, userId: string): Promise<void> {
-    const { error } = await supabase
-      .from('event_subscriptions')
-      .insert([{ event_id: eventId, user_id: userId }])
-
-    if (error) throw error
-  },
-
-  async unsubscribeFromEvent(eventId: string, userId: string): Promise<void> {
-    const { error } = await supabase
-      .from('event_subscriptions')
-      .delete()
-      .eq('event_id', eventId)
-      .eq('user_id', userId)
-
-    if (error) throw error
-  },
-
-  async getUserSubscriptions(userId: string): Promise<EventSubscription[]> {
-    const { data, error } = await supabase
-      .from('event_subscriptions')
-      .select('*')
-      .eq('user_id', userId)
-
-    if (error) throw error
-    return data || []
-  }
-}
-
-// FAQ API
 export const faqApi = {
-  async getFAQs(category?: string): Promise<FAQ[]> {
-    let query = supabase
-      .from('faqs')
-      .select('*')
-      .order('is_featured', { ascending: false })
-      .order('view_count', { ascending: false })
+  getFAQs: (category?: string): Promise<FAQ[]> =>
+    fromSupabase(
+      supabase.from('faqs').select('*').order('view_count', { ascending: false }),
+      'fetching FAQs'
+    ),
+  incrementViewCount: (faqId: string) =>
+    fromSupabase(supabase.rpc('increment_faq_views', { faq_id: faqId }), 'incrementing FAQ view count'),
+  searchFAQs: (searchTerm: string): Promise<FAQ[]> =>
+    fromSupabase(
+      supabase.from('faqs').select('*').textSearch('question', searchTerm),
+      'searching FAQs'
+    ),
+};
 
-    if (category && category !== 'all') {
-      query = query.eq('category', category)
-    }
-
-    const { data, error } = await query
-    if (error) throw error
-    return data || []
-  },
-
-  async incrementViewCount(faqId: string): Promise<void> {
-    const { error } = await supabase.rpc('increment_faq_views', {
-      faq_id: faqId
-    })
-
-    if (error) throw error
-  },
-
-  async searchFAQs(searchTerm: string): Promise<FAQ[]> {
-    const { data, error } = await supabase
-      .from('faqs')
-      .select('*')
-      .or(`question.ilike.%${searchTerm}%,answer.ilike.%${searchTerm}%,tags.cs.{${searchTerm}}`)
-      .order('view_count', { ascending: false })
-
-    if (error) throw error
-    return data || []
-  }
-}
-
-// Chat API
 export const chatApi = {
-  async getSessions(userId: string): Promise<ChatSession[]> {
-    const { data, error } = await supabase
-      .from('chat_sessions')
-      .select('*')
-      .eq('user_id', userId)
-      .order('updated_at', { ascending: false })
-
-    if (error) throw error
-    return data || []
-  },
-
-  async createSession(userId: string, title?: string): Promise<ChatSession> {
-    const { data, error } = await supabase
-      .from('chat_sessions')
-      .insert([{ user_id: userId, title }])
-      .select()
-      .single()
-
-    if (error) throw error
-    return data
-  },
-
-  async getMessages(sessionId: string): Promise<ChatMessage[]> {
-    const { data, error } = await supabase
-      .from('chat_messages')
-      .select('*')
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: true })
-
-    if (error) throw error
-    return data || []
-  },
-
-  async sendMessage(sessionId: string, content: string, isUser: boolean): Promise<void> {
-    const { error } = await supabase
-      .from('chat_messages')
-      .insert([{
-        session_id: sessionId,
-        content,
-        is_user: isUser
-      }])
-
-    if (error) throw error
-
-    // Update session timestamp
-    await supabase
-      .from('chat_sessions')
-      .update({ updated_at: new Date().toISOString() })
-      .eq('id', sessionId)
-  }
-}
+  getSessions: (userId: string): Promise<ChatSession[]> =>
+    fromSupabase(supabase.from('chat_sessions').select('*').eq('user_id', userId), 'fetching chat sessions'),
+  createSession: (userId: string, title?: string): Promise<ChatSession> =>
+    fromSupabase(
+      supabase.from('chat_sessions').insert([{ user_id: userId, title }]).select().single(),
+      'creating chat session'
+    ),
+  deleteSession: (sessionId: string) =>
+    fromSupabase(supabase.from('chat_sessions').delete().eq('id', sessionId), 'deleting chat session'),
+  getMessages: (sessionId: string): Promise<ChatMessage[]> =>
+    fromSupabase(
+      supabase.from('chat_messages').select('*').eq('session_id', sessionId).order('created_at'),
+      'fetching chat messages'
+    ),
+  sendMessage: (sessionId: string, content: string, isUser: boolean) =>
+    fromSupabase(
+      supabase.from('chat_messages').insert([{ session_id: sessionId, content, is_user: isUser }]),
+      'sending message'
+    ),
+};

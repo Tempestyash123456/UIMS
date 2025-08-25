@@ -1,9 +1,8 @@
-import React from 'react'
-import { StatsCardProps } from '../../types'
-import { COLOR_CLASSES } from '../../utils/constants'
+import React from 'react';
+import { StatsCardProps } from '../../types';
+import { COLOR_CLASSES } from '../../utils/constants';
 
 export default function StatsCard({ title, value, icon: Icon, color, trend }: StatsCardProps) {
-
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-200">
       <div className="flex items-center justify-between">
@@ -21,5 +20,5 @@ export default function StatsCard({ title, value, icon: Icon, color, trend }: St
         </div>
       </div>
     </div>
-  )
+  );
 }

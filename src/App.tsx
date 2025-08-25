@@ -1,35 +1,21 @@
-import React from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { Toaster } from 'react-hot-toast'
-import { AuthProvider, useAuth } from './contexts/AuthContext'
-import ErrorBoundary from './components/UI/ErrorBoundary'
-import AuthForm from './components/Auth/AuthForm'
-import Sidebar from './components/Layout/Sidebar'
-import MobileNav from './components/Layout/MobileNav'
-import Dashboard from './pages/Dashboard'
-import CareerRecommendations from './pages/CareerRecommendations'
-import SkillsAssessment from './pages/SkillsAssessment'
-import PeerSupport from './pages/PeerSupport'
-import FAQ from './pages/FAQ'
-import Events from './pages/Events'
-import Chat from './pages/Chat'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import ErrorBoundary from './components/UI/ErrorBoundary';
+import AuthForm from './components/Auth/AuthForm';
+import Sidebar from './components/Layout/Sidebar';
+import MobileNav from './components/Layout/MobileNav';
+import Dashboard from './pages/Dashboard';
+import CareerRecommendations from './pages/CareerRecommendations';
+import SkillsAssessment from './pages/SkillsAssessment';
+import PeerSupport from './pages/PeerSupport';
+import FAQ from './pages/FAQ';
+import Events from './pages/Events';
+import Chat from './pages/Chat';
+import { isSupabaseConfigured } from './lib/supabase';
 
 function AppContent() {
-  const { user, loading } = useAuth()
-  const [error, setError] = React.useState<string | null>(null)
-
-  React.useEffect(() => {
-    // Clear any navigation errors
-    const handleError = (event: ErrorEvent) => {
-      if (event.message.includes('Cannot navigate to URL')) {
-        event.preventDefault()
-        console.warn('Navigation error caught and handled')
-      }
-    }
-
-    window.addEventListener('error', handleError)
-    return () => window.removeEventListener('error', handleError)
-  }, [])
+  const { user, loading } = useAuth();
 
   if (loading) {
     return (
@@ -39,10 +25,10 @@ function AppContent() {
           <p className="text-gray-600">Loading...</p>
         </div>
       </div>
-    )
+    );
   }
 
-  if (error) {
+  if (!isSupabaseConfigured()) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center max-w-md mx-auto p-6">
@@ -52,22 +38,21 @@ function AppContent() {
             </svg>
           </div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">Configuration Required</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
+          <p className="text-gray-600 mb-4">Supabase is not configured. Please check your environment variables.</p>
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
             <h3 className="font-medium text-blue-900 mb-2">To get started:</h3>
             <ol className="text-sm text-blue-800 space-y-1">
-              <li>1. Click "Connect to Supabase" in the top right</li>
-              <li>2. Set up your Supabase project</li>
-              <li>3. The app will automatically reload</li>
+              <li>1. Make sure you have a `.env` file with your Supabase URL and anonymous key.</li>
+              <li>2. Restart the development server.</li>
             </ol>
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   if (!user) {
-    return <AuthForm />
+    return <AuthForm />;
   }
 
   return (
@@ -90,18 +75,18 @@ function AppContent() {
         </Routes>
       </div>
     </div>
-  )
+  );
 }
 
 export default function App() {
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <Router>
+        <AuthProvider>
           <AppContent />
           <Toaster position="top-right" />
-        </Router>
-      </AuthProvider>
+        </AuthProvider>
+      </Router>
     </ErrorBoundary>
-  )
+  );
 }

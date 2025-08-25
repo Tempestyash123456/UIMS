@@ -1,59 +1,42 @@
-import { useState, useEffect } from 'react'
-import toast from 'react-hot-toast'
+import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 
-interface NotificationPermission {
-  granted: boolean
-  denied: boolean
-  default: boolean
-}
+type PermissionStatus = 'granted' | 'denied' | 'default';
 
 export function useNotifications() {
-  const [permission, setPermission] = useState<NotificationPermission>({
-    granted: false,
-    denied: false,
-    default: true
-  })
+  const [permission, setPermission] = useState<PermissionStatus>('default');
 
   useEffect(() => {
     if ('Notification' in window) {
-      const currentPermission = Notification.permission
-      setPermission({
-        granted: currentPermission === 'granted',
-        denied: currentPermission === 'denied',
-        default: currentPermission === 'default'
-      })
+      setPermission(Notification.permission);
     }
-  }, [])
+  }, []);
 
   const requestPermission = async () => {
     if (!('Notification' in window)) {
-      toast.error('This browser does not support notifications')
-      return false
+      toast.error('This browser does not support desktop notifications.');
+      return;
     }
 
-    const result = await Notification.requestPermission()
-    setPermission({
-      granted: result === 'granted',
-      denied: result === 'denied',
-      default: result === 'default'
-    })
-
-    return result === 'granted'
-  }
+    const newPermission = await Notification.requestPermission();
+    setPermission(newPermission);
+    if (newPermission === 'granted') {
+      toast.success('Notifications enabled!');
+    }
+  };
 
   const showNotification = (title: string, options?: NotificationOptions) => {
-    if (permission.granted) {
+    if (permission === 'granted') {
       new Notification(title, {
-        icon: '/vite.svg',
-        badge: '/vite.svg',
-        ...options
-      })
+        icon: '/vite.svg', 
+        ...options,
+      });
     }
-  }
+  };
 
   return {
     permission,
     requestPermission,
-    showNotification
-  }
+    showNotification,
+  };
 }

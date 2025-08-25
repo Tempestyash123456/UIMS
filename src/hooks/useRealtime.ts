@@ -1,16 +1,15 @@
-import { useEffect, useRef } from 'react'
-import { RealtimeChannel } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabase'
+import { useEffect, useRef } from 'react';
+import { RealtimeChannel } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
 
 export function useRealtime(
   table: string,
   callback: (payload: any) => void,
   filter?: string
 ) {
-  const channelRef = useRef<RealtimeChannel | null>(null)
+  const channelRef = useRef<RealtimeChannel | null>(null);
 
   useEffect(() => {
-    // Create channel
     const channel = supabase
       .channel(`realtime-${table}`)
       .on(
@@ -19,22 +18,22 @@ export function useRealtime(
           event: '*',
           schema: 'public',
           table: table,
-          filter: filter
+          filter: filter,
         },
         callback
       )
-      .subscribe()
+      .subscribe();
 
-    channelRef.current = channel
+    channelRef.current = channel;
 
     return () => {
       if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
+        supabase.removeChannel(channelRef.current);
       }
-    }
-  }, [table, callback, filter])
+    };
+  }, [table, callback, filter]);
 
-  return channelRef.current
+  return channelRef.current;
 }
 
 export function useRealtimePresence(
@@ -42,10 +41,10 @@ export function useRealtimePresence(
   userInfo: any,
   onPresenceChange?: (presence: any) => void
 ) {
-  const channelRef = useRef<RealtimeChannel | null>(null)
+  const channelRef = useRef<RealtimeChannel | null>(null);
 
   useEffect(() => {
-    if (!userInfo) return
+    if (!userInfo) return;
 
     const channel = supabase.channel(channelName, {
       config: {
@@ -53,35 +52,35 @@ export function useRealtimePresence(
           key: userInfo.id,
         },
       },
-    })
+    });
 
     channel
       .on('presence', { event: 'sync' }, () => {
-        const newState = channel.presenceState()
+        const newState = channel.presenceState();
         if (onPresenceChange) {
-          onPresenceChange(newState)
+          onPresenceChange(newState);
         }
       })
       .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-        console.log('User joined:', key, newPresences)
+        console.log('User joined:', key, newPresences);
       })
       .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-        console.log('User left:', key, leftPresences)
+        console.log('User left:', key, leftPresences);
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          await channel.track(userInfo)
+          await channel.track(userInfo);
         }
-      })
+      });
 
-    channelRef.current = channel
+    channelRef.current = channel;
 
     return () => {
       if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
+        supabase.removeChannel(channelRef.current);
       }
-    }
-  }, [channelName, userInfo, onPresenceChange])
+    };
+  }, [channelName, userInfo, onPresenceChange]);
 
-  return channelRef.current
+  return channelRef.current;
 }

@@ -6,7 +6,7 @@ import './index.css';
 // Disable service worker in development
 if ('serviceWorker' in navigator && import.meta.env.DEV) {
   navigator.serviceWorker.getRegistrations().then(function(registrations) {
-    for(let registration of registrations) {
+    for(const registration of registrations) {
       registration.unregister();
     }
   });
