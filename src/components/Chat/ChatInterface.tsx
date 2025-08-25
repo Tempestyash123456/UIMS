@@ -21,7 +21,6 @@ export default function ChatInterface({
   const { profile } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
-  const [loading, setLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -199,9 +198,9 @@ export default function ChatInterface({
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Ask me anything about courses, programs, or campus life..."
             className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            disabled={loading}
+            disabled={isTyping}
           />
-          <Button type="submit" loading={loading} disabled={!newMessage.trim()}>
+          <Button type="submit" loading={isTyping} disabled={!newMessage.trim()}>
             <Send className="w-4 h-4" />
             <span>Send</span>
           </Button>
