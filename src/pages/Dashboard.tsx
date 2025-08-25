@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React from 'react';
 import { BookOpen, TrendingUp, Award, Brain, Users, Calendar, MessageCircle } from 'lucide-react';
 import StatsCard from '../components/Dashboard/StatsCard';
 import QuickActions from '../components/Dashboard/QuickActions';
@@ -12,17 +12,18 @@ import toast from 'react-hot-toast';
 
 export default function Dashboard() {
   const { profile, updateProfile } = useAuth();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [recentActivity, setRecentActivity] = useState<QuizAttempt[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = React.useState<DashboardStats | null>(null);
+  const [recentActivity, setRecentActivity] = React.useState<QuizAttempt[]>([]);
+  const [loading, setLoading] = React.useState(true);
 
-  const fetchDashboardData = useCallback(async () => {
+  const fetchDashboardData = React.useCallback(async () => {
     if (!profile?.id) return;
     try {
       const [statsData, activityData] = await Promise.all([
         dashboardApi.getStats(profile.id),
         dashboardApi.getRecentActivity(profile.id),
       ]);
+      // The data from the RPC call is an array with one element
       setStats(statsData);
       setRecentActivity(activityData);
     } catch (error) {
@@ -33,7 +34,7 @@ export default function Dashboard() {
     }
   }, [profile?.id]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
@@ -82,10 +83,10 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <StatsCard title="Quizzes Completed" value={stats?.quizzesTaken ?? 0} icon={Brain} color="blue" />
-          <StatsCard title="Questions Asked" value={stats?.questionsAsked ?? 0} icon={Users} color="purple" />
-          <StatsCard title="Events Subscribed" value={stats?.eventsSubscribed ?? 0} icon={Calendar} color="green" />
-          <StatsCard title="AI Conversations" value={stats?.chatSessions ?? 0} icon={MessageCircle} color="orange" />
+          <StatsCard title="Quizzes Completed" value={stats?.quizzes_taken ?? 0} icon={Brain} color="blue" />
+          <StatsCard title="Questions Asked" value={stats?.questions_asked ?? 0} icon={Users} color="purple" />
+          <StatsCard title="Events Subscribed" value={stats?.events_subscribed ?? 0} icon={Calendar} color="green" />
+          <StatsCard title="AI Conversations" value={stats?.chat_sessions ?? 0} icon={MessageCircle} color="orange" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">

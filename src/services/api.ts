@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import {
   Profile,
@@ -15,15 +16,15 @@ import {
   DashboardStats,
 } from '../types';
 import toast from 'react-hot-toast';
+import { PostgrestError } from '@supabase/supabase-js';
 
-const handleError = (error: any, context: string) => {
+const handleError = (error: PostgrestError, context: string) => {
   console.error(`Error in ${context}:`, error);
   toast.error(`An error occurred in ${context}.`);
   throw error;
 };
 
-// A generic function to fetch data from Supabase
-const fromSupabase = async (query: any, context: string) => {
+const fromSupabase = async <T>(query: any, context: string): Promise<T> => {
   if (!isSupabaseConfigured()) {
     throw new Error('Supabase is not configured.');
   }
@@ -35,7 +36,7 @@ const fromSupabase = async (query: any, context: string) => {
 };
 
 export const profileApi = {
-  getProfile: (userId: string) =>
+  getProfile: (userId: string): Promise<Profile> =>
     fromSupabase(
       supabase.from('profiles').select('*').eq('id', userId).single(),
       'fetching profile'
@@ -93,8 +94,34 @@ export const peerApi = {
 };
 
 export const dashboardApi = {
-  getStats: (userId: string): Promise<DashboardStats> =>
-    fromSupabase(supabase.rpc('get_dashboard_stats', { user_id: userId }), 'fetching dashboard stats'),
+  async getStats(userId: string): Promise<DashboardStats> {
+    const defaultStats = {
+      quizzes_taken: 0,
+      questions_asked: 0,
+      events_subscribed: 0,
+      chat_sessions: 0,
+    };
+
+    if (!isSupabaseConfigured()) {
+      throw new Error('Supabase is not configured.');
+    }
+
+    try {
+      const { data, error } = await supabase.rpc('get_dashboard_stats', { p_user_id: userId });
+
+      if (error) {
+        throw error;
+      }
+      
+      // Safely handle the response and return it, or the default stats if it's empty.
+      return data && data.length > 0 ? data[0] : defaultStats;
+
+    } catch (error: any) {
+      handleError(error, 'fetching dashboard stats');
+      // Return the correctly structured default object on error.
+      return defaultStats;
+    }
+  },
   getRecentActivity: (userId: string): Promise<QuizAttempt[]> =>
     fromSupabase(
       supabase.from('quiz_attempts').select('*, quiz_categories(name)').eq('user_id', userId).limit(5),
@@ -123,11 +150,13 @@ export const eventsApi = {
 };
 
 export const faqApi = {
-  getFAQs: (category?: string): Promise<FAQ[]> =>
-    fromSupabase(
-      supabase.from('faqs').select('*').order('view_count', { ascending: false }),
-      'fetching FAQs'
-    ),
+  getFAQs: (category?: string): Promise<FAQ[]> => {
+    let query = supabase.from('faqs').select('*').order('view_count', { ascending: false });
+    if (category && category !== 'all') {
+      query = query.eq('category', category);
+    }
+    return fromSupabase(query, 'fetching FAQs');
+  },
   incrementViewCount: (faqId: string) =>
     fromSupabase(supabase.rpc('increment_faq_views', { faq_id: faqId }), 'incrementing FAQ view count'),
   searchFAQs: (searchTerm: string): Promise<FAQ[]> =>

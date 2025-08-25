@@ -131,10 +131,10 @@ export interface ChatMessage {
 
 // API and Component Prop Types
 export interface DashboardStats {
-  quizzesTaken: number;
-  questionsAsked: number;
-  eventsSubscribed: number;
-  chatSessions: number;
+  quizzes_taken: number;
+  questions_asked: number;
+  events_subscribed: number;
+  chat_sessions: number;
 }
 
 export interface StatsCardProps {
