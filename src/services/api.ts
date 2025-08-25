@@ -169,21 +169,44 @@ export const faqApi = {
 export const chatApi = {
   getSessions: (userId: string): Promise<ChatSession[]> =>
     fromSupabase(supabase.from('chat_sessions').select('*').eq('user_id', userId), 'fetching chat sessions'),
+  
   createSession: (userId: string, title?: string): Promise<ChatSession> =>
     fromSupabase(
       supabase.from('chat_sessions').insert([{ user_id: userId, title }]).select().single(),
       'creating chat session'
     ),
+  
   deleteSession: (sessionId: string) =>
     fromSupabase(supabase.from('chat_sessions').delete().eq('id', sessionId), 'deleting chat session'),
+  
   getMessages: (sessionId: string): Promise<ChatMessage[]> =>
     fromSupabase(
       supabase.from('chat_messages').select('*').eq('session_id', sessionId).order('created_at'),
       'fetching chat messages'
     ),
-  sendMessage: (sessionId: string, content: string, isUser: boolean) =>
-    fromSupabase(
-      supabase.from('chat_messages').insert([{ session_id: sessionId, content, is_user: isUser }]),
-      'sending message'
-    ),
+  
+  sendMessage: (sessionId: string, content: string, isUser: boolean): Promise<ChatMessage> => // <-- Update return type
+  fromSupabase(
+    supabase
+      .from('chat_messages')
+      .insert([{ session_id: sessionId, content, is_user: isUser }])
+      .select() // <-- Add .select()
+      .single(), // <-- Add .single()
+    'sending message'
+  ),
+
+  // ADD THIS NEW FUNCTION
+  getAiResponse: async (query: string): Promise<{ response?: string; error?: string }> => {
+    if (!isSupabaseConfigured()) {
+        throw new Error('Supabase is not configured.');
+    }
+    const { data, error } = await supabase.functions.invoke('gemini-chat', {
+        body: { query },
+    });
+
+    if (error) {
+        handleError(error as any, 'invoking gemini-chat function');
+    }
+    return data;
+  },
 };
