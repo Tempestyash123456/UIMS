@@ -176,6 +176,12 @@ export const chatApi = {
       'creating chat session'
     ),
   
+  updateSession: (sessionId: string, title: string): Promise<ChatSession> =>
+    fromSupabase(
+      supabase.from('chat_sessions').update({ title }).eq('id', sessionId).select().single(),
+      'updating chat session'
+    ),
+
   deleteSession: (sessionId: string) =>
     fromSupabase(supabase.from('chat_sessions').delete().eq('id', sessionId), 'deleting chat session'),
   
@@ -185,17 +191,16 @@ export const chatApi = {
       'fetching chat messages'
     ),
   
-  sendMessage: (sessionId: string, content: string, isUser: boolean): Promise<ChatMessage> => // <-- Update return type
+  sendMessage: (sessionId: string, content: string, isUser: boolean): Promise<ChatMessage> =>
   fromSupabase(
     supabase
       .from('chat_messages')
       .insert([{ session_id: sessionId, content, is_user: isUser }])
-      .select() // <-- Add .select()
-      .single(), // <-- Add .single()
+      .select()
+      .single(),
     'sending message'
   ),
 
-  // ADD THIS NEW FUNCTION
   getAiResponse: async (query: string): Promise<{ response?: string; error?: string }> => {
     if (!isSupabaseConfigured()) {
         throw new Error('Supabase is not configured.');

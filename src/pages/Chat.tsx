@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { MessageCircle, Plus, Trash2 } from 'lucide-react';
+import { MessageCircle, Plus, Trash2, Edit } from 'lucide-react';
 import { ChatSession } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { chatApi } from '../services/api';
@@ -9,50 +9,77 @@ import LoadingSpinner from '../components/UI/LoadingSpinner';
 import Button from '../components/UI/Button';
 import ChatInterface from '../components/Chat/ChatInterface';
 import EmptyState from '../components/UI/EmptyState';
+import ConfirmationModal from '../components/UI/ConfirmationModal';
+import toast from 'react-hot-toast';
 
 export default function Chat() {
   const { profile } = useAuth();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [newTitle, setNewTitle] = useState('');
 
   const fetchSessions = useCallback(async () => {
     if (!profile?.id) return;
+    setLoading(true);
     try {
       const data = await chatApi.getSessions(profile.id);
       setSessions(data);
-      if (data.length > 0 && !selectedSession) {
-        setSelectedSession(data[0]);
+      if (data.length > 0) {
+        if (!selectedSession || !data.some(s => s.id === selectedSession.id)) {
+          setSelectedSession(data[0]);
+        }
+      } else {
+        setSelectedSession(null);
       }
     } catch (error) {
       console.error('Error fetching chat sessions:', error);
     } finally {
       setLoading(false);
     }
-  }, [profile?.id, selectedSession]);
+  }, [profile?.id]);
 
   useEffect(() => {
     fetchSessions();
   }, [fetchSessions]);
 
+  const handleRealtimeEvent = useCallback((payload: any) => {
+    switch (payload.eventType) {
+      case 'INSERT':
+        setSessions(prev => [payload.new, ...prev]);
+        break;
+      case 'UPDATE':
+        setSessions(prev =>
+          prev.map(s => (s.id === payload.new.id ? payload.new : s))
+        );
+        setSelectedSession(currentSelected =>
+          currentSelected?.id === payload.new.id ? payload.new : currentSelected
+        );
+        break;
+      case 'DELETE':
+        setSessions(prevSessions => {
+          const newSessions = prevSessions.filter(s => s.id !== payload.old.id);
+          setSelectedSession(currentSelected => {
+            if (currentSelected?.id === payload.old.id) {
+              return newSessions.length > 0 ? newSessions[0] : null;
+            }
+            return currentSelected;
+          });
+          return newSessions;
+        });
+        break;
+      default:
+        break;
+    }
+  }, []);
+
   useRealtime(
     'chat_sessions',
-    (payload) => {
-      if (payload.new?.user_id === profile?.id) {
-        if (payload.eventType === 'INSERT') {
-          setSessions((prev) => [payload.new, ...prev]);
-        } else if (payload.eventType === 'UPDATE') {
-          setSessions((prev) =>
-            prev.map((session) => (session.id === payload.new.id ? payload.new : session))
-          );
-        } else if (payload.eventType === 'DELETE') {
-          setSessions((prev) => prev.filter((session) => session.id !== payload.old.id));
-          if (selectedSession?.id === payload.old.id) {
-            setSelectedSession(sessions[0] || null);
-          }
-        }
-      }
-    },
+    handleRealtimeEvent,
     profile?.id ? `user_id=eq.${profile.id}` : undefined
   );
 
@@ -63,15 +90,52 @@ export default function Chat() {
       setSelectedSession(newSession);
     } catch (error) {
       console.error('Error creating chat session:', error);
+      toast.error('Failed to create new chat.');
     }
   };
 
-  const deleteSession = async (e: React.MouseEvent, sessionId: string) => {
+  const handleDeleteRequest = (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
+    setSessionToDelete(sessionId);
+    setIsModalOpen(true);
+  };
+
+  const confirmDeleteSession = async () => {
+    if (!sessionToDelete) return;
+    setIsDeleting(true);
     try {
-      await chatApi.deleteSession(sessionId);
+      await chatApi.deleteSession(sessionToDelete);
+      toast.success('Chat session deleted successfully');
     } catch (error) {
-      console.error('Error deleting session:', error);
+      toast.error('Failed to delete chat session.');
+    } finally {
+      setIsModalOpen(false);
+      setSessionToDelete(null);
+      setIsDeleting(false);
+    }
+  };
+
+  const handleEdit = (session: ChatSession) => {
+    setEditingSessionId(session.id);
+    setNewTitle(session.title || '');
+  };
+
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewTitle(e.target.value);
+  };
+
+  const handleTitleUpdate = async (sessionId: string) => {
+    if (!newTitle.trim()) {
+      setEditingSessionId(null);
+      return;
+    }
+    try {
+      await chatApi.updateSession(sessionId, newTitle);
+      toast.success('Session title updated!');
+    } catch (error) {
+      toast.error('Failed to update title.');
+    } finally {
+      setEditingSessionId(null);
     }
   };
 
@@ -85,26 +149,41 @@ export default function Chat() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <aside className="w-80 bg-white border-r border-gray-200 flex flex-col">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center">
-              <MessageCircle className="w-6 h-6 text-blue-600 mr-2" />
-              <h2 className="text-xl font-bold text-gray-900">AI Assistant</h2>
+    <>
+      <ConfirmationModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onConfirm={confirmDeleteSession}
+        title="Delete Chat Session"
+        message="Are you sure you want to delete this chat session? This action cannot be undone."
+        confirmText="Delete"
+        isLoading={isDeleting}
+      />
+      <div className="min-h-screen bg-gray-50 flex">
+        <aside className="w-80 bg-white border-r border-gray-200 flex flex-col">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                <MessageCircle className="w-6 h-6 text-blue-600 mr-2" />
+                <h2 className="text-xl font-bold text-gray-900">
+                  AI Assistant
+                </h2>
+              </div>
+              <Button
+                onClick={createNewSession}
+                size="sm"
+                icon={<Plus className="w-4 h-4" />}
+              >
+                New
+              </Button>
             </div>
-            <Button onClick={createNewSession} size="sm" icon={<Plus className="w-4 h-4" />}>
-              New
-            </Button>
+            <p className="text-sm text-gray-600">
+              Ask me anything about courses, programs, and campus life.
+            </p>
           </div>
-          <p className="text-sm text-gray-600">
-            Ask me anything about courses, programs, and campus life.
-          </p>
-        </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {sessions.length > 0 ? (
-            sessions.map((session) => (
+          <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            {sessions.map((session) => (
               <div
                 key={session.id}
                 className={`p-3 rounded-lg cursor-pointer transition-colors duration-200 group ${
@@ -116,51 +195,82 @@ export default function Chat() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-medium text-gray-900 truncate">
-                      {session.title || 'Untitled Chat'}
-                    </h3>
-                    <p className="text-xs text-gray-500 mt-1">{formatDate(session.updated_at)}</p>
+                    {editingSessionId === session.id ? (
+                      <input
+                        type="text"
+                        value={newTitle}
+                        onChange={handleTitleChange}
+                        onBlur={() => handleTitleUpdate(session.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleTitleUpdate(session.id);
+                          } else if (e.key === 'Escape') {
+                            setEditingSessionId(null);
+                          }
+                        }}
+                        className="text-sm font-medium text-gray-900 truncate w-full p-1 -m-1 bg-white border border-blue-300 rounded"
+                        autoFocus
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <h3
+                        className="text-sm font-medium text-gray-900 truncate"
+                        onDoubleClick={() => handleEdit(session)}
+                      >
+                        {session.title || 'Untitled Chat'}
+                      </h3>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      {formatDate(session.updated_at)}
+                    </p>
                   </div>
-                  <button
-                    onClick={(e) => deleteSession(e, session.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleEdit(session) }}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-blue-600"
+                      aria-label="Edit title"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={(e) => handleDeleteRequest(e, session.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600"
+                       aria-label="Delete session"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
-            ))
+            ))}
+          </div>
+        </aside>
+
+        <main className="flex-1 flex flex-col">
+          {selectedSession ? (
+            <ChatInterface
+              session={selectedSession}
+              onSessionUpdate={(updatedSession) => {
+                setSessions((prev) =>
+                  prev.map((s) =>
+                    s.id === updatedSession.id ? updatedSession : s
+                  )
+                );
+              }}
+            />
           ) : (
-            <div className="p-6 text-center text-gray-500">
-              <MessageCircle className="w-12 h-12 mx-auto mb-3" />
-              <p>No chat sessions yet.</p>
+            <div className="flex-1 flex items-center justify-center">
+              <EmptyState
+                icon={MessageCircle}
+                title="No Chats Available"
+                description="Create a new chat to get started with the AI assistant."
+                actionLabel="Create New Chat"
+                onAction={createNewSession}
+              />
             </div>
           )}
-        </div>
-      </aside>
-
-      <main className="flex-1 flex flex-col">
-        {selectedSession ? (
-          <ChatInterface
-            session={selectedSession}
-            onSessionUpdate={(updatedSession) => {
-              setSessions((prev) =>
-                prev.map((s) => (s.id === updatedSession.id ? updatedSession : s))
-              );
-            }}
-          />
-        ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <EmptyState
-              icon={MessageCircle}
-              title="Select a Chat"
-              description="Select a chat from the sidebar or create a new one to get started."
-              actionLabel="Create New Chat"
-              onAction={createNewSession}
-            />
-          </div>
-        )}
-      </main>
-    </div>
+        </main>
+      </div>
+    </>
   );
 }
