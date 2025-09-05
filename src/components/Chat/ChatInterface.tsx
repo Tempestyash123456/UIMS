@@ -45,16 +45,9 @@ export default function ChatInterface({
     scrollToBottom();
   }, [messages, isTyping]);
 
-  // In src/components/Chat/ChatInterface.tsx
-
-  //... inside the ChatInterface component
-
   useRealtime(
     "chat_messages",
     (payload) => {
-      // LOG 1: See if the real-time message arrives
-      console.log("Real-time payload received:", payload);
-
       if (payload.new && payload.new.session_id === session.id) {
         setMessages((prev) => [...prev, payload.new]);
         if (!payload.new.is_user) {
@@ -65,8 +58,6 @@ export default function ChatInterface({
     `session_id=eq.${session.id}`
   );
 
-  // In src/components/Chat/ChatInterface.tsx
-
   const sendMessage = async (e: FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !profile?.id) return;
@@ -75,7 +66,6 @@ export default function ChatInterface({
     setNewMessage("");
 
     try {
-      // Optimistically add the user's message to the UI
       const userMessage = await chatApi.sendMessage(
         session.id,
         messageContent,
@@ -85,8 +75,12 @@ export default function ChatInterface({
       setIsTyping(true);
 
       // Get the AI response
-      const { response: aiResponse, error: aiError } =
-        await chatApi.getAiResponse(messageContent);
+      const fullResponse = await chatApi.getAiResponse(messageContent);
+      
+      // ADDED THIS LINE FOR DEBUGGING
+      console.log('Full response from AI function:', fullResponse);
+
+      const { response: aiResponse, error: aiError } = fullResponse;
       setIsTyping(false);
 
       if (aiError || !aiResponse) {
@@ -98,11 +92,10 @@ export default function ChatInterface({
           "Sorry, I couldn't process that request.",
           false
         );
-        setMessages((prev) => [...prev, errorMessage]); // Add error message to UI
+        setMessages((prev) => [...prev, errorMessage]);
         return;
       }
 
-      // Optimistically add the AI's message to the UI
       const aiMessage = await chatApi.sendMessage(
         session.id,
         aiResponse,
@@ -131,14 +124,11 @@ export default function ChatInterface({
               message.is_user ? "justify-end" : "justify-start"
             }`}
           >
-            {/* AI Avatar */}
             {!message.is_user && (
               <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center bg-gradient-to-br from-green-400 to-blue-500">
                 <Bot className="w-5 h-5 text-white" />
               </div>
             )}
-
-            {/* Message Bubble and Timestamp */}
             <div
               className={`flex flex-col max-w-xs lg:max-w-md ${
                 message.is_user ? "items-end" : "items-start"
@@ -163,8 +153,6 @@ export default function ChatInterface({
                 {formatDateTime(message.created_at)}
               </p>
             </div>
-
-            {/* User Avatar */}
             {message.is_user && (
               <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-500">
                 <User className="w-5 h-5 text-white" />
