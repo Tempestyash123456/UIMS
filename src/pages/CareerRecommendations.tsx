@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Target, Lightbulb, CheckCircle, Brain, ArrowRight } from 'lucide-react';
+import { Target, Lightbulb, CheckCircle, Brain, ArrowRight, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { AiCareerRecommendation, QuizAttempt } from '../types';
+import { AiCareerRecommendation, QuizAttempt, Profile } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { careerApi, quizApi } from '../services/api';
 import { ROUTES } from '../utils/constants';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 import EmptyState from '../components/UI/EmptyState';
 import Button from '../components/UI/Button';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
-// A new card component specifically for displaying AI recommendations
 const AiCareerCard = ({ recommendation }: { recommendation: AiCareerRecommendation }) => {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-200 flex flex-col">
@@ -20,9 +20,7 @@ const AiCareerCard = ({ recommendation }: { recommendation: AiCareerRecommendati
             <Target className="w-6 h-6 text-white" />
           </div>
         </div>
-
         <p className="text-gray-600 mb-6">{recommendation.description}</p>
-        
         <div className="bg-blue-50 p-4 rounded-lg mb-6">
           <div className="flex items-start">
             <Lightbulb className="w-5 h-5 text-blue-600 mr-3 mt-1 flex-shrink-0" />
@@ -32,7 +30,6 @@ const AiCareerCard = ({ recommendation }: { recommendation: AiCareerRecommendati
             </div>
           </div>
         </div>
-
         <div>
           <h4 className="text-md font-semibold text-gray-700 mb-3">Suggested Skills to Learn:</h4>
           <ul className="space-y-2">
@@ -58,38 +55,54 @@ const AiCareerCard = ({ recommendation }: { recommendation: AiCareerRecommendati
 export default function CareerRecommendations() {
   const { profile } = useAuth();
   const [recommendations, setRecommendations] = useState<AiCareerRecommendation[]>([]);
-  const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const getRecommendations = async () => {
-      if (!profile?.id) return;
+  const [cachedRecs, setCachedRecs] = useLocalStorage<AiCareerRecommendation[] | null>('careerRecs', null);
+  const [cachedSnapshot, setCachedSnapshot] = useLocalStorage<string | null>('careerRecsSnapshot', null);
 
-      setLoading(true);
-      setError(null);
+  const getRecommendations = async (forceRefresh = false) => {
+    if (!profile) return;
 
-      try {
-        // First, fetch the user's quiz history
-        const attempts = await quizApi.getUserAttempts(profile.id);
-        setQuizAttempts(attempts);
+    setLoading(true);
+    setError(null);
 
-        if (attempts.length === 0) {
-          setLoading(false);
-          return;
-        }
+    try {
+      const attempts = await quizApi.getUserAttempts(profile.id);
 
-        // Then, get the AI recommendations
-        const aiRecs = await careerApi.getAiCareerRecommendations(profile, attempts);
-        setRecommendations(aiRecs);
-      } catch (err: any) {
-        console.error('Error fetching career recommendations:', err);
-        setError('Could not generate career recommendations at this time. Please try again later.');
-      } finally {
+      if (attempts.length === 0) {
+        setRecommendations([]);
         setLoading(false);
+        return;
       }
-    };
 
+      // Create a snapshot of the current quiz state
+      const newSnapshot = `attempts:${attempts.length}-last:${attempts[0]?.created_at}`;
+
+      // If not forcing a refresh and the snapshot matches the cache, use cached data
+      if (!forceRefresh && newSnapshot === cachedSnapshot && cachedRecs) {
+        setRecommendations(cachedRecs);
+        setLoading(false);
+        return;
+      }
+
+      // Otherwise, fetch new recommendations from the AI
+      const aiRecs = await careerApi.getAiCareerRecommendations(profile, attempts);
+      setRecommendations(aiRecs);
+      
+      // Update the cache with the new data
+      setCachedRecs(aiRecs);
+      setCachedSnapshot(newSnapshot);
+
+    } catch (err: any) {
+      console.error('Error fetching career recommendations:', err);
+      setError('Could not generate career recommendations. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     getRecommendations();
   }, [profile]);
 
@@ -106,24 +119,18 @@ export default function CareerRecommendations() {
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <EmptyState
-          icon={Target}
-          title="Error"
-          description={error}
-        />
+        <EmptyState icon={Target} title="Error" description={error} />
       </div>
     );
   }
 
-  if (quizAttempts.length === 0) {
+  if (recommendations.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <EmptyState
           icon={Brain}
           title="Take a Quiz to Get Recommendations"
           description="We need to learn more about your skills to provide personalized career recommendations. Complete a skills assessment to get started!"
-          actionLabel="Go to Skills Assessment"
-          onAction={() => {}} // Placeholder, as Link is used below
         >
            <Link to={ROUTES.SKILLS}>
               <Button className="mt-4">Go to Skills Assessment</Button>
@@ -137,28 +144,27 @@ export default function CareerRecommendations() {
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         <header className="mb-8">
-          <div className="flex items-center mb-4">
-            <Target className="w-8 h-8 text-blue-600 mr-3" />
-            <h1 className="text-3xl font-bold text-gray-900">Your AI-Powered Career Recommendations</h1>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center mb-4">
+                <Target className="w-8 h-8 text-blue-600 mr-3" />
+                <h1 className="text-3xl font-bold text-gray-900">Your AI-Powered Career Recommendations</h1>
+              </div>
+              <p className="text-gray-600 text-lg">
+                Based on your profile and quiz results, here are some career paths you might excel in.
+              </p>
+            </div>
+            <Button variant="outline" onClick={() => getRecommendations(true)} icon={<RefreshCw className="w-4 h-4"/>}>
+              Refresh
+            </Button>
           </div>
-          <p className="text-gray-600 text-lg">
-            Based on your profile and quiz results, here are some career paths you might excel in.
-          </p>
         </header>
 
-        {recommendations.length > 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {recommendations.map((rec) => (
-              <AiCareerCard key={rec.title} recommendation={rec} />
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            icon={Target}
-            title="No Recommendations Found"
-            description="We couldn't generate any recommendations based on your current profile and quiz data."
-          />
-        )}
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          {recommendations.map((rec) => (
+            <AiCareerCard key={rec.title} recommendation={rec} />
+          ))}
+        </div>
       </div>
     </div>
   );
