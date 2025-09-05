@@ -135,10 +135,11 @@ export const dashboardApi = {
       return defaultStats;
     }
   },
-  getRecentActivity: (userId: string): Promise<QuizAttempt[]> =>
+  getLatestAttemptsByCategory: (userId: string): Promise<QuizAttempt[]> =>
     fromSupabase(
-      supabase.from('quiz_attempts').select('*, quiz_categories(name)').eq('user_id', userId).limit(5),
-      'fetching recent activity'
+      supabase.rpc('get_latest_quiz_attempts_by_category', { p_user_id: userId })
+        .select('*, quiz_categories(name)'),
+      'fetching latest quiz attempts'
     ),
 };
 

@@ -1,31 +1,31 @@
 import React from 'react';
-import { BookOpen, TrendingUp, Award, Brain, Users, Calendar, MessageCircle } from 'lucide-react';
+import { BookOpen, TrendingUp, Award, Brain, Users, Calendar, MessageCircle, Clock } from 'lucide-react';
 import StatsCard from '../components/Dashboard/StatsCard';
 import QuickActions from '../components/Dashboard/QuickActions';
-import RecentActivity from '../components/Dashboard/RecentActivity';
 import ProfileSetupReminder from '../components/Dashboard/ProfileSetupReminder';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 import { useAuth } from '../contexts/AuthContext';
 import { dashboardApi } from '../services/api';
 import { DashboardStats, QuizAttempt } from '../types';
 import toast from 'react-hot-toast';
+import LatestQuizScores from '../components/Dashboard/LatestQuizScores';
 
 export default function Dashboard() {
   const { profile, updateProfile } = useAuth();
   const [stats, setStats] = React.useState<DashboardStats | null>(null);
-  const [recentActivity, setRecentActivity] = React.useState<QuizAttempt[]>([]);
+  const [latestAttempts, setLatestAttempts] = React.useState<QuizAttempt[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   const fetchDashboardData = React.useCallback(async () => {
     if (!profile?.id) return;
     try {
-      const [statsData, activityData] = await Promise.all([
+      setLoading(true);
+      const [statsData, attemptsData] = await Promise.all([
         dashboardApi.getStats(profile.id),
-        dashboardApi.getRecentActivity(profile.id),
+        dashboardApi.getLatestAttemptsByCategory(profile.id),
       ]);
-      // The data from the RPC call is an array with one element
       setStats(statsData);
-      setRecentActivity(activityData);
+      setLatestAttempts(attemptsData);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       toast.error('Could not load dashboard data.');
@@ -89,21 +89,21 @@ export default function Dashboard() {
           <StatsCard title="AI Conversations" value={stats?.chat_sessions ?? 0} icon={MessageCircle} color="orange" />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+          <div className="lg:col-span-1 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+             <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
               <TrendingUp className="w-5 h-5 mr-2 text-blue-600" />
               Quick Actions
             </h3>
             <QuickActions />
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
               <Award className="w-5 h-5 mr-2 text-purple-600" />
-              Recent Activity
+              Latest Quiz Scores
             </h3>
-            <RecentActivity activities={recentActivity} />
+            <LatestQuizScores attempts={latestAttempts} />
           </div>
         </div>
 
