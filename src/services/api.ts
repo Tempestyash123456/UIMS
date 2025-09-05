@@ -14,11 +14,12 @@ import {
   ChatSession,
   ChatMessage,
   DashboardStats,
+  AiCareerRecommendation,
 } from '../types';
 import toast from 'react-hot-toast';
 import { PostgrestError } from '@supabase/supabase-js';
 
-const handleError = (error: PostgrestError, context: string) => {
+const handleError = (error: PostgrestError | Error, context: string) => {
   console.error(`Error in ${context}:`, error);
   toast.error(`An error occurred in ${context}.`);
   throw error;
@@ -52,6 +53,20 @@ export const profileApi = {
 export const careerApi = {
   getCareerPaths: (): Promise<CareerPath[]> =>
     fromSupabase(supabase.from('career_paths').select('*'), 'fetching career paths'),
+  
+  getAiCareerRecommendations: async (profile: Profile, quizAttempts: QuizAttempt[]): Promise<AiCareerRecommendation[]> => {
+    if (!isSupabaseConfigured()) {
+      throw new Error('Supabase is not configured.');
+    }
+    const { data, error } = await supabase.functions.invoke('gemini-career-recommendations', {
+      body: { profile, quizAttempts },
+    });
+
+    if (error) {
+      handleError(error, 'fetching AI career recommendations');
+    }
+    return data.recommendations || [];
+  },
 };
 
 export const quizApi = {
@@ -113,12 +128,10 @@ export const dashboardApi = {
         throw error;
       }
       
-      // Safely handle the response and return it, or the default stats if it's empty.
       return data && data.length > 0 ? data[0] : defaultStats;
 
     } catch (error: any) {
       handleError(error, 'fetching dashboard stats');
-      // Return the correctly structured default object on error.
       return defaultStats;
     }
   },

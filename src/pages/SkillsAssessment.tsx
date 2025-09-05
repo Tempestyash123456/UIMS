@@ -1,5 +1,5 @@
 import { useState, useEffect, useReducer, useCallback } from 'react';
-import { Brain, Play, Award } from 'lucide-react'; // Changed Trophy to Award
+import { Brain, Play, Award } from 'lucide-react';
 import { QuizCategory, QuizQuestion as QuizQuestionType, QuizAttempt, QuizState } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { quizApi } from '../services/api';
@@ -106,7 +106,17 @@ export default function SkillsAssessment() {
   if (loading) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner size="lg" /></div>;
 
   if (quizState.isCompleted) {
-    return <QuizResults category={selectedCategory!} score={quizState.score} totalQuestions={questions.length} timeStarted={quizState.timeStarted} onRetakeQuiz={() => dispatch({ type: 'RESET' })} />;
+    return (
+      <QuizResults 
+        category={selectedCategory!} 
+        score={quizState.score} 
+        totalQuestions={questions.length} 
+        timeStarted={quizState.timeStarted} 
+        onRetakeQuiz={() => dispatch({ type: 'RESET' })}
+        questions={questions}
+        answers={quizState.answers}
+      />
+    );
   }
 
   if (questions.length > 0 && selectedCategory) {

@@ -34,6 +34,14 @@ export interface CareerPath {
   education_requirements?: string;
 }
 
+// New type for AI-powered recommendations
+export interface AiCareerRecommendation {
+  title: string;
+  description: string;
+  reasoning: string;
+  suggested_skills_to_learn: string[];
+}
+
 // Quiz Types
 export interface QuizCategory {
   id: string;

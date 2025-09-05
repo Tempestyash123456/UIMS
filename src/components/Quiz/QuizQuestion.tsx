@@ -44,13 +44,6 @@ export default function QuizQuestion({
           );
         })}
       </div>
-
-      {question.explanation && selectedAnswer && (
-        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-          <h4 className="font-medium text-blue-900 mb-2">Explanation:</h4>
-          <p className="text-blue-800">{question.explanation}</p>
-        </div>
-      )}
     </div>
   );
 }

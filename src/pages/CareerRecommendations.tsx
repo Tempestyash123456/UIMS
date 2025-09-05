@@ -1,93 +1,55 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Target, TrendingUp, DollarSign, BookOpen, Filter } from 'lucide-react';
-// Import the Profile type
-import { CareerPath, Profile } from '../types'; 
+import { useState, useEffect } from 'react';
+import { Target, Lightbulb, CheckCircle, Brain, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { AiCareerRecommendation, QuizAttempt } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { careerApi } from '../services/api';
-import { calculateCareerMatch, isUserSkillMatch } from '../utils/helpers';
-import { CAREER_FILTERS } from '../utils/constants';
+import { careerApi, quizApi } from '../services/api';
+import { ROUTES } from '../utils/constants';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
-import SearchInput from '../components/UI/SearchInput';
 import EmptyState from '../components/UI/EmptyState';
+import Button from '../components/UI/Button';
 
-// Correct the type for the profile prop here
-const CareerPathCard = ({ path, profile }: { path: CareerPath; profile: Profile | null }) => {
-  const matchPercentage = calculateCareerMatch(path, profile!);
-
+// A new card component specifically for displaying AI recommendations
+const AiCareerCard = ({ recommendation }: { recommendation: AiCareerRecommendation }) => {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-200">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex-1">
-          <h3 className="text-xl font-bold text-gray-900 mb-2">{path.title}</h3>
-          {matchPercentage > 0 && (
-            <div className="flex items-center mb-2">
-              <div className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
-                {matchPercentage}% Match
-              </div>
-            </div>
-          )}
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-200 flex flex-col">
+      <div className="flex-grow">
+        <div className="flex items-start justify-between mb-4">
+          <h3 className="text-xl font-bold text-gray-900 flex-1 pr-4">{recommendation.title}</h3>
+          <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
+            <Target className="w-6 h-6 text-white" />
+          </div>
         </div>
-        <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
-          <Target className="w-6 h-6 text-white" />
-        </div>
-      </div>
 
-      <p className="text-gray-600 mb-6 line-clamp-3">{path.description}</p>
-
-      <div className="space-y-4">
-        {path.salary_range && (
-          <div className="flex items-center">
-            <DollarSign className="w-5 h-5 text-green-600 mr-2" />
-            <span className="text-sm text-gray-700">
-              <strong>Salary:</strong> {path.salary_range}
-            </span>
-          </div>
-        )}
-        {path.growth_outlook && (
-          <div className="flex items-center">
-            <TrendingUp className="w-5 h-5 text-blue-600 mr-2" />
-            <span className="text-sm text-gray-700">
-              <strong>Growth:</strong> {path.growth_outlook}
-            </span>
-          </div>
-        )}
-        {path.education_requirements && (
-          <div className="flex items-center">
-            <BookOpen className="w-5 h-5 text-purple-600 mr-2" />
-            <span className="text-sm text-gray-700">
-              <strong>Education:</strong> {path.education_requirements}
-            </span>
-          </div>
-        )}
-        {path.required_skills && path.required_skills.length > 0 && (
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-2">Required Skills:</h4>
-            <div className="flex flex-wrap gap-2">
-              {path.required_skills.map((skill, index) => {
-                const isUserSkill = isUserSkillMatch(skill, profile?.skills);
-                return (
-                  <span
-                    key={index}
-                    className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      isUserSkill
-                        ? 'bg-green-100 text-green-800 border border-green-200'
-                        : 'bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    {skill}
-                    {isUserSkill && ' ✓'}
-                  </span>
-                );
-              })}
+        <p className="text-gray-600 mb-6">{recommendation.description}</p>
+        
+        <div className="bg-blue-50 p-4 rounded-lg mb-6">
+          <div className="flex items-start">
+            <Lightbulb className="w-5 h-5 text-blue-600 mr-3 mt-1 flex-shrink-0" />
+            <div>
+              <h4 className="font-semibold text-blue-900">Why it's a good match:</h4>
+              <p className="text-sm text-blue-800">{recommendation.reasoning}</p>
             </div>
           </div>
-        )}
-      </div>
+        </div>
 
+        <div>
+          <h4 className="text-md font-semibold text-gray-700 mb-3">Suggested Skills to Learn:</h4>
+          <ul className="space-y-2">
+            {recommendation.suggested_skills_to_learn.map((skill, index) => (
+              <li key={index} className="flex items-center text-gray-600">
+                <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
+                <span className="text-sm">{skill}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
       <div className="mt-6 pt-6 border-t border-gray-100">
-        <button className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200">
-          Learn More
-        </button>
+        <Button className="w-full">
+          <span>Explore Path</span>
+          <ArrowRight className="w-4 h-4 ml-2" />
+        </Button>
       </div>
     </div>
   );
@@ -95,54 +57,78 @@ const CareerPathCard = ({ path, profile }: { path: CareerPath; profile: Profile 
 
 export default function CareerRecommendations() {
   const { profile } = useAuth();
-  const [careerPaths, setCareerPaths] = useState<CareerPath[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState('all');
+  const [recommendations, setRecommendations] = useState<AiCareerRecommendation[]>([]);
+  const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchCareerPaths = async () => {
+    const getRecommendations = async () => {
+      if (!profile?.id) return;
+
+      setLoading(true);
+      setError(null);
+
       try {
-        const data = await careerApi.getCareerPaths();
-        setCareerPaths(data);
-      } catch (error) {
-        console.error('Error fetching career paths:', error);
+        // First, fetch the user's quiz history
+        const attempts = await quizApi.getUserAttempts(profile.id);
+        setQuizAttempts(attempts);
+
+        if (attempts.length === 0) {
+          setLoading(false);
+          return;
+        }
+
+        // Then, get the AI recommendations
+        const aiRecs = await careerApi.getAiCareerRecommendations(profile, attempts);
+        setRecommendations(aiRecs);
+      } catch (err: any) {
+        console.error('Error fetching career recommendations:', err);
+        setError('Could not generate career recommendations at this time. Please try again later.');
       } finally {
         setLoading(false);
       }
     };
-    fetchCareerPaths();
-  }, []);
 
-  const filteredPaths = useMemo(() => {
-    let filtered = careerPaths;
-
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (path) =>
-          path.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          path.description.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (selectedFilter === CAREER_FILTERS.RECOMMENDED && profile?.skills?.length) {
-      filtered = filtered.filter((path) =>
-        path.required_skills?.some((skill) =>
-          profile.skills?.some((userSkill) =>
-            userSkill.toLowerCase().includes(skill.toLowerCase())
-          )
-        )
-      );
-    }
-
-    return filtered;
-  }, [careerPaths, searchTerm, selectedFilter, profile]);
+    getRecommendations();
+  }, [profile]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center text-center p-4">
         <LoadingSpinner size="lg" />
-        <p className="text-gray-600 ml-4">Loading career recommendations...</p>
+        <p className="text-gray-600 mt-4 text-lg font-medium">Generating your personalized career recommendations...</p>
+        <p className="text-gray-500 mt-1">This may take a moment.</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <EmptyState
+          icon={Target}
+          title="Error"
+          description={error}
+        />
+      </div>
+    );
+  }
+
+  if (quizAttempts.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <EmptyState
+          icon={Brain}
+          title="Take a Quiz to Get Recommendations"
+          description="We need to learn more about your skills to provide personalized career recommendations. Complete a skills assessment to get started!"
+          actionLabel="Go to Skills Assessment"
+          onAction={() => {}} // Placeholder, as Link is used below
+        >
+           <Link to={ROUTES.SKILLS}>
+              <Button className="mt-4">Go to Skills Assessment</Button>
+            </Link>
+        </EmptyState>
       </div>
     );
   }
@@ -153,46 +139,24 @@ export default function CareerRecommendations() {
         <header className="mb-8">
           <div className="flex items-center mb-4">
             <Target className="w-8 h-8 text-blue-600 mr-3" />
-            <h1 className="text-3xl font-bold text-gray-900">Career Recommendations</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Your AI-Powered Career Recommendations</h1>
           </div>
           <p className="text-gray-600 text-lg">
-            Discover career paths that match your skills and interests.
+            Based on your profile and quiz results, here are some career paths you might excel in.
           </p>
         </header>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
-          <div className="flex flex-col md:flex-row gap-4">
-            <SearchInput
-              value={searchTerm}
-              onChange={setSearchTerm}
-              placeholder="Search career paths..."
-              className="flex-1"
-            />
-            <div className="flex items-center space-x-2">
-              <Filter className="w-5 h-5 text-gray-400" />
-              <select
-                value={selectedFilter}
-                onChange={(e) => setSelectedFilter(e.target.value)}
-                className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value={CAREER_FILTERS.ALL}>All Careers</option>
-                <option value={CAREER_FILTERS.RECOMMENDED}>Recommended for You</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {filteredPaths.length > 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {filteredPaths.map((path) => (
-              <CareerPathCard key={path.id} path={path} profile={profile} />
+        {recommendations.length > 0 ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            {recommendations.map((rec) => (
+              <AiCareerCard key={rec.title} recommendation={rec} />
             ))}
           </div>
         ) : (
           <EmptyState
             icon={Target}
-            title="No Career Paths Found"
-            description="Try adjusting your search terms or filters to find relevant career paths."
+            title="No Recommendations Found"
+            description="We couldn't generate any recommendations based on your current profile and quiz data."
           />
         )}
       </div>
