@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Bell, X, Check, Info, AlertCircle, CheckCircle } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Bell, Check, Info, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotifications as useBrowserNotifications } from '../../hooks/useNotifications';
 import { useRealtime } from '../../hooks/useRealtime';
@@ -9,7 +9,7 @@ import { Notification } from '../../types';
 
 export default function NotificationCenter() {
   const { profile } = useAuth();
-  const { permission, requestPermission, showNotification } = useBrowserNotifications();
+  const { showNotification } = useBrowserNotifications();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
