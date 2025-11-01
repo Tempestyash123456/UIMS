@@ -63,7 +63,7 @@ export const careerApi = {
     });
 
     if (error) {
-      handleError(error, 'fetching AI career recommendations');
+      handleError(error as any, 'fetching AI career recommendations');
     }
     return data.recommendations || [];
   },
@@ -72,19 +72,35 @@ export const careerApi = {
 export const quizApi = {
   getCategories: (): Promise<QuizCategory[]> =>
     fromSupabase(supabase.from('quiz_categories').select('*'), 'fetching quiz categories'),
+    
+  getCategoryByName: (name: string): Promise<QuizCategory> =>
+    fromSupabase(
+      supabase.from('quiz_categories').select('*').eq('name', name).single(),
+      'fetching quiz category by name'
+    ),
 
   getQuestions: (categoryId: string): Promise<QuizQuestion[]> =>
     fromSupabase(
-      supabase.from('quiz_questions').select('*').eq('category_id', categoryId),
+      supabase.from('quiz_questions').select('*').eq('category_id', categoryId).limit(30), 
       'fetching quiz questions'
     ),
-
+    
+  // ⬅️ NEW FUNCTION: Fetches attempts for the single core assessment category
+  getAttemptsByCategoryId: (userId: string, categoryId: string): Promise<QuizAttempt[]> =>
+    fromSupabase(
+      supabase.from('quiz_attempts').select('*, quiz_categories(name)')
+        .eq('user_id', userId)
+        .eq('category_id', categoryId)
+        .order('created_at', { ascending: false }),
+      'fetching user attempts for a specific category'
+    ),
+    
   saveAttempt: (attempt: Omit<QuizAttempt, 'id' | 'created_at'>) =>
     fromSupabase(supabase.from('quiz_attempts').insert([attempt]), 'saving quiz attempt'),
 
   getUserAttempts: (userId: string): Promise<QuizAttempt[]> =>
     fromSupabase(
-      supabase.from('quiz_attempts').select('*, quiz_categories(name)').eq('user_id', userId),
+      supabase.from('quiz_attempts').select('*, quiz_categories(name)').eq('user_id', userId).order('created_at', { ascending: false }),
       'fetching user attempts'
     ),
 };

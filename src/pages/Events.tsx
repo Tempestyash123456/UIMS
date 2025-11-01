@@ -7,8 +7,9 @@ import { useRealtime } from '../hooks/useRealtime';
 import { useDebounce } from '../hooks/useDebounce';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 import SearchInput from '../components/UI/SearchInput';
-import EmptyState from '../components/UI/EmptyState';
+import { EmptyState } from '../components/UI/EmptyState';
 import EventCard from '../components/Events/EventCard';
+import toast from 'react-hot-toast'; // Import toast for error handling
 
 export default function Events() {
   const { profile } = useAuth();
@@ -17,34 +18,53 @@ export default function Events() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [hasError, setHasError] = useState(false); // New Error State
 
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   const fetchEvents = useCallback(async () => {
     try {
+      setHasError(false);
       const data = await eventsApi.getEvents();
       setEvents(data);
     } catch (error) {
       console.error('Error fetching events:', error);
-    } finally {
-      setLoading(false);
-    }
+      toast.error('Failed to load events list.');
+      setHasError(true);
+    } 
   }, []);
 
   const fetchSubscriptions = useCallback(async () => {
-    if (!profile?.id) return;
+    if (!profile?.id) {
+      setSubscriptions([]); // Clear subscriptions if logged out
+      return;
+    }
     try {
       const data = await eventsApi.getUserSubscriptions(profile.id);
       setSubscriptions(data);
     } catch (error) {
       console.error('Error fetching subscriptions:', error);
+      toast.error('Failed to load event subscriptions.');
     }
   }, [profile?.id]);
 
+  // Combine initial data fetch into one effect
   useEffect(() => {
-    fetchEvents();
-    fetchSubscriptions();
-  }, [fetchEvents, fetchSubscriptions]);
+    let isMounted = true;
+    const loadData = async () => {
+      setLoading(true);
+      await Promise.all([fetchEvents(), fetchSubscriptions()]);
+      if (isMounted) {
+         setLoading(false);
+      }
+    };
+
+    loadData();
+
+    return () => {
+      isMounted = false;
+    }
+  }, [fetchEvents, fetchSubscriptions]); // Depend on memoized fetch functions
 
   useRealtime('events', (payload) => {
     if (payload.eventType === 'INSERT') {
@@ -69,6 +89,20 @@ export default function Events() {
   }, [events, debouncedSearchTerm, selectedType]);
 
   const eventTypes = useMemo(() => [...new Set(events.map((event) => event.event_type))], [events]);
+
+  if (hasError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <EmptyState
+            icon={Calendar}
+            title="Data Load Error"
+            description="Failed to retrieve events. Please check your connection or try again later."
+            actionLabel="Reload Page"
+            onAction={() => window.location.reload()}
+        />
+      </div>
+    );
+  }
 
   if (loading) {
     return (

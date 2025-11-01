@@ -12,7 +12,7 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import NotificationCenter from '../Notifications/NotificationCenter';
+// import NotificationCenter from '../Notifications/NotificationCenter'; // ⬅️ REMOVED IMPORT
 import { ROUTES } from '../../utils/constants';
 
 const navItems = [
@@ -26,7 +26,10 @@ const navItems = [
 ];
 
 export default function Sidebar() {
-  const { signOut, profile } = useAuth();
+  const { signOut, profile, profileLoading } = useAuth();
+
+  const fullName = profile?.full_name || 'Student';
+  const major = profile?.major || 'University Student';
 
   return (
     <aside className="bg-white shadow-lg h-screen w-64 flex flex-col">
@@ -68,18 +71,22 @@ export default function Sidebar() {
         <div className="flex items-center space-x-3 mb-4">
           <Link to="/profile">
             <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-              <User className="w-5 h-5 text-white" />
+              {profileLoading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <User className="w-5 h-5 text-white" />
+              )}
             </div>
           </Link>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-800 truncate">
-              {profile?.full_name || 'Student'}
+            <p className={`text-sm font-medium text-gray-800 truncate ${profileLoading ? 'animate-pulse bg-gray-200 rounded' : ''}`}>
+              {profileLoading ? '\u00A0' : fullName}
             </p>
-            <p className="text-xs text-gray-500 truncate">
-              {profile?.major || 'University Student'}
+            <p className={`text-xs text-gray-500 truncate ${profileLoading ? 'animate-pulse bg-gray-100 rounded' : ''}`}>
+              {profileLoading ? '\u00A0' : major}
             </p>
           </div>
-          <NotificationCenter />
+          {/* REMOVED: <NotificationCenter /> */}
         </div>
 
         <button

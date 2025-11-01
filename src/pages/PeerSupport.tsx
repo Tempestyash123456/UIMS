@@ -7,7 +7,7 @@ import { QUIZ_CATEGORIES } from '../utils/constants';
 import { formatDate } from '../utils/helpers';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 import SearchInput from '../components/UI/SearchInput';
-import EmptyState from '../components/UI/EmptyState';
+import { EmptyState } from '../components/UI/EmptyState';
 import Button from '../components/UI/Button';
 import toast from 'react-hot-toast';
 

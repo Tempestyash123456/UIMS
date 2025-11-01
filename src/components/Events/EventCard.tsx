@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Calendar, MapPin, Users, Bell, BellOff } from 'lucide-react';
 import { Event, EventSubscription } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
@@ -31,7 +31,8 @@ export default function EventCard({ event, subscription, onSubscriptionChange }:
         toast.success('Unsubscribed from event');
       } else {
         await eventsApi.subscribeToEvent(event.id, profile.id);
-        toast.success('Subscribed to event!');
+        // ⬅️ UPDATED SUCCESS MESSAGE to confirm email initiated
+        toast.success('Subscribed to event! Confirmation email sent.');
       }
       onSubscriptionChange?.();
     } catch (error: any) {

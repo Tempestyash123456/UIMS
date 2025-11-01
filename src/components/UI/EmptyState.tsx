@@ -10,14 +10,14 @@ interface EmptyStateProps {
   className?: string;
 }
 
-export default function EmptyState({
+export const EmptyState = ({
   icon: Icon,
   title,
   description,
   actionLabel,
   onAction,
   className = '',
-}: EmptyStateProps) {
+}: EmptyStateProps) => {
   return (
     <div className={`text-center p-8 ${className}`}>
       <div className="flex justify-center mb-4">

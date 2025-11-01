@@ -8,7 +8,7 @@ import { formatDate } from '../utils/helpers';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 import Button from '../components/UI/Button';
 import ChatInterface from '../components/Chat/ChatInterface';
-import EmptyState from '../components/UI/EmptyState';
+import { EmptyState } from '../components/UI/EmptyState';
 import ConfirmationModal from '../components/UI/ConfirmationModal';
 import toast from 'react-hot-toast';
 
@@ -41,41 +41,62 @@ export default function Chat() {
     } finally {
       setLoading(false);
     }
-  }, [profile?.id]);
+  }, [profile?.id, selectedSession]);
 
   useEffect(() => {
     fetchSessions();
   }, [fetchSessions]);
 
   const handleRealtimeEvent = useCallback((payload: any) => {
-    switch (payload.eventType) {
-      case 'INSERT':
-        setSessions(prev => [payload.new, ...prev]);
-        break;
-      case 'UPDATE':
-        setSessions(prev =>
-          prev.map(s => (s.id === payload.new.id ? payload.new : s))
-        );
-        setSelectedSession(currentSelected =>
-          currentSelected?.id === payload.new.id ? payload.new : currentSelected
-        );
-        break;
-      case 'DELETE':
-        setSessions(prevSessions => {
-          const newSessions = prevSessions.filter(s => s.id !== payload.old.id);
-          setSelectedSession(currentSelected => {
-            if (currentSelected?.id === payload.old.id) {
-              return newSessions.length > 0 ? newSessions[0] : null;
+    
+    // We use a temporary variable for the next selected session, updated in place.
+    let nextSelectedSession = selectedSession;
+
+    setSessions(prevSessions => {
+      let newSessions = [...prevSessions];
+
+      switch (payload.eventType) {
+        case 'INSERT':
+          newSessions = [payload.new, ...prevSessions];
+          nextSelectedSession = payload.new;
+          break;
+          
+        case 'UPDATE':
+          newSessions = prevSessions.map(s => (s.id === payload.new.id ? payload.new : s));
+          if (nextSelectedSession?.id === payload.new.id) {
+            nextSelectedSession = payload.new;
+          }
+          break;
+          
+        case 'DELETE':
+          newSessions = prevSessions.filter(s => s.id !== payload.old.id);
+          
+          if (selectedSession?.id === payload.old.id) {
+            // Find the index of the deleted item in the original (prevSessions) list
+            const deletedIndex = prevSessions.findIndex(s => s.id === payload.old.id);
+            
+            // 🚨 CRITICAL FIX: Select the session at the same index in the new list.
+            // If that index is out of bounds (because it was the last item), select the last item in the new list.
+            // If the list is empty, nextSelectedSession will be null.
+            if (newSessions.length > 0) {
+              const newIndex = Math.min(deletedIndex, newSessions.length - 1);
+              nextSelectedSession = newSessions[newIndex];
+            } else {
+              nextSelectedSession = null;
             }
-            return currentSelected;
-          });
-          return newSessions;
-        });
-        break;
-      default:
-        break;
-    }
-  }, []);
+          }
+          break;
+        default:
+          return prevSessions;
+      }
+      
+      // Update the selected session immediately after session list is calculated.
+      setSelectedSession(nextSelectedSession);
+      
+      return newSessions;
+    });
+
+  }, [selectedSession]); // We need selectedSession to know if the deleted session was the current one
 
   useRealtime(
     'chat_sessions',
@@ -106,6 +127,7 @@ export default function Chat() {
     try {
       await chatApi.deleteSession(sessionToDelete);
       toast.success('Chat session deleted successfully');
+      // The realtime listener handles the UI removal and selection change instantly.
     } catch (error) {
       toast.error('Failed to delete chat session.');
     } finally {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react'; // ⬅️ Added useRef
 import { Bell, Check, Info, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotifications as useBrowserNotifications } from '../../hooks/useNotifications';
@@ -13,6 +13,7 @@ export default function NotificationCenter() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const wrapperRef = useRef<HTMLDivElement>(null); // ⬅️ Ref for detecting outside clicks
 
   const fetchNotifications = useCallback(async () => {
     if (!profile?.id) return;
@@ -36,17 +37,40 @@ export default function NotificationCenter() {
     }
   }, [isOpen, fetchNotifications]);
 
+  // ⬅️ NEW: Use useEffect to handle clicks outside the component
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    
+    // Bind the event listener only when open
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    
+    // Unbind the event listener on clean up or when closed
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [wrapperRef, isOpen]);
+  // ⬅️ END NEW: Outside click handler
+
   useRealtime(
     'notifications',
     (payload) => {
       if (payload.new && payload.new.user_id === profile?.id) {
         const newNotification = payload.new as Notification;
-        setNotifications((prev) => [newNotification, ...prev]);
-        setUnreadCount((prev) => prev + 1);
-        showNotification(newNotification.title, {
-          body: newNotification.message,
-          tag: newNotification.id,
-        });
+        // Check if notification already exists to avoid duplication with initial fetch
+        if (!notifications.some(n => n.id === newNotification.id)) {
+            setNotifications((prev) => [newNotification, ...prev]);
+            setUnreadCount((prev) => prev + 1);
+            showNotification(newNotification.title, {
+              body: newNotification.message,
+              tag: newNotification.id,
+            });
+        }
       }
     },
     profile?.id ? `user_id=eq.${profile.id}` : undefined
@@ -73,11 +97,14 @@ export default function NotificationCenter() {
     }
   };
 
+  // ⬅️ Use wrapperRef here
   return (
-    <div className="relative">
+    <div className="relative" ref={wrapperRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="relative p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+        aria-expanded={isOpen}
+        aria-controls="notification-panel"
       >
         <Bell className="w-6 h-6" />
         {unreadCount > 0 && (
@@ -88,9 +115,11 @@ export default function NotificationCenter() {
       </button>
 
       {isOpen && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-lg border border-gray-200 z-50 max-h-96 overflow-hidden flex flex-col">
+        <div 
+          id="notification-panel"
+          className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-lg border border-gray-200 z-50 max-h-96 overflow-hidden flex flex-col"
+          // Removed the fixed inset-0 overlay click handler 
+        >
             <div className="p-4 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
@@ -131,7 +160,6 @@ export default function NotificationCenter() {
               )}
             </div>
           </div>
-        </>
       )}
     </div>
   );

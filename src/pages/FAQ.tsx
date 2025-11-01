@@ -6,7 +6,8 @@ import { useDebounce } from '../hooks/useDebounce';
 import { QUIZ_CATEGORIES } from '../utils/constants';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 import SearchInput from '../components/UI/SearchInput';
-import EmptyState from '../components/UI/EmptyState';
+import { EmptyState } from '../components/UI/EmptyState';
+import toast from 'react-hot-toast'; // Import toast
 
 const FaqItem = ({
   faq,
@@ -64,11 +65,13 @@ export default function FAQ() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasError, setHasError] = useState(false); // New Error State
 
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   const fetchFAQs = useCallback(async () => {
     setLoading(true);
+    setHasError(false); // Reset error state on new fetch attempt
     try {
       const data = debouncedSearchTerm
         ? await faqApi.searchFAQs(debouncedSearchTerm)
@@ -76,6 +79,8 @@ export default function FAQ() {
       setFaqs(data);
     } catch (error) {
       console.error('Error fetching FAQs:', error);
+      toast.error('Failed to load FAQs.');
+      setHasError(true); // Set error on failure
     } finally {
       setLoading(false);
     }
@@ -98,13 +103,29 @@ export default function FAQ() {
           )
         );
       } catch (error) {
+        // Log the error but don't set hasError to true, as content is still visible
         console.error('Error incrementing view count:', error);
+        toast.error('Failed to track view count.');
       }
     }
   };
   
   const featuredFaqs = useMemo(() => faqs.filter((faq) => faq.is_featured).slice(0, 3), [faqs]);
 
+  if (hasError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <EmptyState
+            icon={HelpCircle}
+            title="Data Load Error"
+            description="Failed to retrieve FAQs. Please check your connection or try again."
+            actionLabel="Reload FAQs"
+            onAction={fetchFAQs} // Allow user to retry the fetch
+        />
+      </div>
+    );
+  }
+  
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">

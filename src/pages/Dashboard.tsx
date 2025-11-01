@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, TrendingUp, Award, Brain, Users, Calendar, MessageCircle, Clock } from 'lucide-react';
+import { TrendingUp, Award, Brain, Users, Calendar, MessageCircle } from 'lucide-react';
 import StatsCard from '../components/Dashboard/StatsCard';
 import QuickActions from '../components/Dashboard/QuickActions';
 import ProfileSetupReminder from '../components/Dashboard/ProfileSetupReminder';
@@ -9,9 +9,10 @@ import { dashboardApi } from '../services/api';
 import { DashboardStats, QuizAttempt } from '../types';
 import toast from 'react-hot-toast';
 import LatestQuizScores from '../components/Dashboard/LatestQuizScores';
+import NotificationCenter from '../components/Notifications/NotificationCenter';
 
 export default function Dashboard() {
-  const { profile, updateProfile } = useAuth();
+  const { profile, profileLoading, updateProfile } = useAuth();
   const [stats, setStats] = React.useState<DashboardStats | null>(null);
   const [latestAttempts, setLatestAttempts] = React.useState<QuizAttempt[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -35,8 +36,10 @@ export default function Dashboard() {
   }, [profile?.id]);
 
   React.useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]);
+    if (profile && !profileLoading) {
+      fetchDashboardData();
+    }
+  }, [profile, profileLoading, fetchDashboardData]);
 
   const handleProfileSetup = async () => {
     try {
@@ -50,7 +53,7 @@ export default function Dashboard() {
     }
   };
 
-  if (loading) {
+  if (loading || profileLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <LoadingSpinner size="lg" />
@@ -62,9 +65,10 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
+        {/* UPDATED: Header Banner with Notification Center */}
         <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-green-600 rounded-2xl p-8 text-white mb-8">
-          <div className="flex flex-col md:flex-row items-center justify-between">
-            <div>
+          <div className="flex items-start justify-between"> 
+            <div className="flex-1">
               <h1 className="text-3xl md:text-4xl font-bold mb-2">
                 Welcome back, {profile?.full_name?.split(' ')[0] || 'Student'}! 👋
               </h1>
@@ -72,17 +76,16 @@ export default function Dashboard() {
                 Here's your academic and career snapshot.
               </p>
             </div>
-            <div className="text-right mt-4 md:mt-0">
-              <div className="bg-white/20 backdrop-blur-sm rounded-lg p-4">
-                <BookOpen className="w-12 h-12 text-white mb-2 mx-auto" />
-                <p className="text-sm text-blue-100">UniSupport</p>
-                <p className="text-xs text-blue-200">Student Platform</p>
-              </div>
+            
+            <div className="flex-shrink-0 relative -mt-4 -mr-4">
+              <NotificationCenter />
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {/* UPDATED: Stats Card Grid: Reverted to standard 4 columns, removing the App Info Card */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"> 
+          
           <StatsCard title="Quizzes Completed" value={stats?.quizzes_taken ?? 0} icon={Brain} color="blue" />
           <StatsCard title="Questions Asked" value={stats?.questions_asked ?? 0} icon={Users} color="purple" />
           <StatsCard title="Events Subscribed" value={stats?.events_subscribed ?? 0} icon={Calendar} color="green" />

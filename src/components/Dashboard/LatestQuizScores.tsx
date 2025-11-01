@@ -1,8 +1,7 @@
-import React from 'react';
 import { Brain } from 'lucide-react';
 import { QuizAttempt } from '../../types';
 import { formatDate } from '../../utils/helpers';
-import EmptyState from '../UI/EmptyState';
+import { EmptyState } from '../UI/EmptyState';
 
 interface LatestQuizScoresProps {
   attempts: QuizAttempt[];

@@ -1,145 +1,217 @@
-import { useState, useEffect } from 'react';
-import { Target, Lightbulb, CheckCircle, Brain, ArrowRight, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Target, Lightbulb, CheckCircle, Brain, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { AiCareerRecommendation, QuizAttempt, Profile } from '../types';
+import { AiCareerRecommendation, QuizCategory } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { careerApi, quizApi } from '../services/api';
 import { ROUTES } from '../utils/constants';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
-import EmptyState from '../components/UI/EmptyState';
+import { EmptyState } from '../components/UI/EmptyState';
 import Button from '../components/UI/Button';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import toast from 'react-hot-toast';
 
+// ⬅️ FINAL UPDATED AiCareerCard component for clean, single-card display
 const AiCareerCard = ({ recommendation }: { recommendation: AiCareerRecommendation }) => {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-200 flex flex-col">
-      <div className="flex-grow">
-        <div className="flex items-start justify-between mb-4">
-          <h3 className="text-xl font-bold text-gray-900 flex-1 pr-4">{recommendation.title}</h3>
-          <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
-            <Target className="w-6 h-6 text-white" />
-          </div>
+    <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-8 flex flex-col max-w-4xl mx-auto"> 
+      
+      {/* HEADER ROW: Title and Icon */}
+      <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
+        <h3 className="text-3xl font-extrabold text-gray-900 flex-1 pr-4">
+          {recommendation.course_stream || 'Recommended Course/Stream'} 
+        </h3>
+        <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+          <Target className="w-6 h-6 text-white" />
         </div>
-        <p className="text-gray-600 mb-6">{recommendation.description}</p>
-        <div className="bg-blue-50 p-4 rounded-lg mb-6">
+      </div>
+      
+      <div className="space-y-6 flex-grow">
+        
+        {/* Prerequisites Section */}
+        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
           <div className="flex items-start">
-            <Lightbulb className="w-5 h-5 text-blue-600 mr-3 mt-1 flex-shrink-0" />
+            <CheckCircle className="w-5 h-5 text-green-700 mr-3 mt-1 flex-shrink-0" />
             <div>
-              <h4 className="font-semibold text-blue-900">Why it's a good match:</h4>
-              <p className="text-sm text-blue-800">{recommendation.reasoning}</p>
+              <h4 className="font-semibold text-green-900">Required Prerequisites:</h4>
+              <p className="text-sm text-green-800 mt-1">{recommendation.prerequisites || 'N/A'}</p>
             </div>
           </div>
         </div>
-        <div>
-          <h4 className="text-md font-semibold text-gray-700 mb-3">Suggested Skills to Learn:</h4>
-          <ul className="space-y-2">
-            {recommendation.suggested_skills_to_learn.map((skill, index) => (
-              <li key={index} className="flex items-center text-gray-600">
-                <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
-                <span className="text-sm">{skill}</span>
-              </li>
-            ))}
-          </ul>
+
+        {/* Reasoning Section */}
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          <div className="flex items-start">
+            <Lightbulb className="w-5 h-5 text-blue-700 mr-3 mt-1 flex-shrink-0" />
+            <div>
+              <h4 className="font-semibold text-blue-900">Reasoning:</h4>
+              {/* Ensure whitespace-pre-wrap allows new lines but the max-length hint should enforce brevity */}
+              <p className="text-sm text-blue-800 mt-1 whitespace-pre-wrap">{recommendation.reasoning || 'Reasoning unavailable.'}</p>
+            </div>
+          </div>
         </div>
+        
       </div>
-      <div className="mt-6 pt-6 border-t border-gray-100">
-        <Button className="w-full">
-          <span>Explore Path</span>
-          <ArrowRight className="w-4 h-4 ml-2" />
-        </Button>
-      </div>
+
     </div>
   );
 };
+
+// Define the Core Assessment Name constant
+const CORE_ASSESSMENT_NAME = 'Programming Fundamentals';
 
 export default function CareerRecommendations() {
   const { profile } = useAuth();
   const [recommendations, setRecommendations] = useState<AiCareerRecommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [coreCategory, setCoreCategory] = useState<QuizCategory | null>(null);
+  const [hasAttempted, setHasAttempted] = useState(false);
+  
+  const [isDataInitialized, setIsDataInitialized] = useState(false); 
 
+  // Use localStorage hooks for caching
   const [cachedRecs, setCachedRecs] = useLocalStorage<AiCareerRecommendation[] | null>('careerRecs', null);
   const [cachedSnapshot, setCachedSnapshot] = useLocalStorage<string | null>('careerRecsSnapshot', null);
 
-  const getRecommendations = async (forceRefresh = false) => {
-    if (!profile) return;
+
+  // 1. Fetch the Core Assessment Category ID
+  useEffect(() => {
+    let isMounted = true;
+    const fetchCoreCategory = async () => {
+      try {
+        const category = await quizApi.getCategoryByName(CORE_ASSESSMENT_NAME);
+        if (isMounted) {
+            setCoreCategory(category);
+        }
+      } catch (err) {
+        if (isMounted) {
+            console.error('Failed to fetch core category:', err);
+            setError('System Error: Core assessment category is missing.');
+        }
+      }
+    };
+    fetchCoreCategory();
+    return () => { isMounted = false; };
+  }, []); // Run only once
+
+  
+  // 2. Main recommendation fetch logic
+  const getRecommendations = useCallback(async (forceRefresh = false) => {
+    if (!profile || !coreCategory) return; 
+    
+    if (isDataInitialized && !forceRefresh) {
+        return;
+    }
 
     setLoading(true);
     setError(null);
 
     try {
-      const attempts = await quizApi.getUserAttempts(profile.id);
+      const attempts = await quizApi.getAttemptsByCategoryId(profile.id, coreCategory.id);
 
       if (attempts.length === 0) {
+        setHasAttempted(false);
         setRecommendations([]);
+        setIsDataInitialized(true); 
         setLoading(false);
-        return;
+        return; 
       }
+      
+      setHasAttempted(true);
 
-      // Create a snapshot of the current quiz state
-      const newSnapshot = `attempts:${attempts.length}-last:${attempts[0]?.created_at}`;
+      // --- Caching Logic ---
+      const lastAttemptTimestamp = attempts[0]?.created_at || '';
+      const newSnapshot = `core-attempts:${attempts.length}-last:${lastAttemptTimestamp}`;
 
-      // If not forcing a refresh and the snapshot matches the cache, use cached data
       if (!forceRefresh && newSnapshot === cachedSnapshot && cachedRecs) {
         setRecommendations(cachedRecs);
+        if (cachedRecs.length > 0 && !isDataInitialized) {
+           toast('Recommendations loaded from cache.', { icon: '💾' });
+        }
         setLoading(false);
+        setIsDataInitialized(true); 
         return;
       }
+      // --- End Caching Logic ---
 
-      // Otherwise, fetch new recommendations from the AI
+      // Fetch new recommendations from the AI
       const aiRecs = await careerApi.getAiCareerRecommendations(profile, attempts);
       setRecommendations(aiRecs);
       
-      // Update the cache with the new data
+      // Update the cache
       setCachedRecs(aiRecs);
       setCachedSnapshot(newSnapshot);
+      
+      toast.success('New recommendations generated!'); 
 
     } catch (err: any) {
       console.error('Error fetching career recommendations:', err);
-      setError('Could not generate career recommendations. Please try again later.');
+      setError('Could not generate career recommendations. Please try refreshing.');
+      toast.error('Failed to generate recommendations.');
     } finally {
       setLoading(false);
+      setIsDataInitialized(true);
     }
-  };
+  }, [profile, coreCategory, isDataInitialized, cachedSnapshot, cachedRecs, setCachedRecs, setCachedSnapshot]);
 
+  // 3. Effect to run the main logic once all dependencies are met
   useEffect(() => {
-    getRecommendations();
-  }, [profile]);
+    if (profile && coreCategory && !isDataInitialized) {
+      getRecommendations();
+    }
+  }, [profile, coreCategory, isDataInitialized, getRecommendations]);
 
-  if (loading) {
+  
+  // --- Render Logic ---
+
+  // 1. Initial State (Waiting for necessary IDs/Profile)
+  if (loading || !coreCategory || !profile) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center text-center p-4">
         <LoadingSpinner size="lg" />
-        <p className="text-gray-600 mt-4 text-lg font-medium">Generating your personalized career recommendations...</p>
+        <p className="text-gray-600 mt-4 text-lg font-medium">
+          {error ? "System Error" : "Initializing career system and fetching core data..."}
+        </p>
         <p className="text-gray-500 mt-1">This may take a moment.</p>
       </div>
     );
   }
 
+  // 2. Hard Error State (e.g., core category missing, network failure after fetch)
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <EmptyState icon={Target} title="Error" description={error} />
+        <EmptyState 
+          icon={Target} 
+          title="Recommendation Error" 
+          description={error} 
+          actionLabel="Try Refreshing Page"
+          onAction={() => window.location.reload()}
+        />
       </div>
     );
   }
 
-  if (recommendations.length === 0) {
+  // 3. Empty State (User has not taken the required assessment)
+  if (!hasAttempted) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <EmptyState
           icon={Brain}
-          title="Take a Quiz to Get Recommendations"
-          description="We need to learn more about your skills to provide personalized career recommendations. Complete a skills assessment to get started!"
+          title="Take the Initial Assessment"
+          description={`You must complete the 30-question Initial Skills Assessment ("${coreCategory.name}") to generate personalized career recommendations.`}
         >
+          </EmptyState>
            <Link to={ROUTES.SKILLS}>
               <Button className="mt-4">Go to Skills Assessment</Button>
             </Link>
-        </EmptyState>
+        
       </div>
     );
   }
 
+  // 4. Success State (Recommendations Loaded)
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
@@ -148,10 +220,10 @@ export default function CareerRecommendations() {
             <div>
               <div className="flex items-center mb-4">
                 <Target className="w-8 h-8 text-blue-600 mr-3" />
-                <h1 className="text-3xl font-bold text-gray-900">Your AI-Powered Career Recommendations</h1>
+                <h1 className="text-3xl font-bold text-gray-900">Course Recommendation</h1>
               </div>
               <p className="text-gray-600 text-lg">
-                Based on your profile and quiz results, here are some career paths you might excel in.
+                Based on your Assessment score, here is the best academic path for you.
               </p>
             </div>
             <Button variant="outline" onClick={() => getRecommendations(true)} icon={<RefreshCw className="w-4 h-4"/>}>
@@ -160,9 +232,9 @@ export default function CareerRecommendations() {
           </div>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {recommendations.map((rec) => (
-            <AiCareerCard key={rec.title} recommendation={rec} />
+        <div className="grid grid-cols-1 gap-6"> 
+          {recommendations.length > 0 && recommendations.map((rec, index) => (
+            <AiCareerCard key={index} recommendation={rec} /> 
           ))}
         </div>
       </div>

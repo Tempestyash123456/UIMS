@@ -1,12 +1,11 @@
 import { useState, useEffect, useReducer, useCallback } from 'react';
-import { Brain, Play, Award } from 'lucide-react';
+import { Brain, Play, Award, HelpCircle, RefreshCw } from 'lucide-react';
 import { QuizCategory, QuizQuestion as QuizQuestionType, QuizAttempt, QuizState } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { quizApi } from '../services/api';
 import { getScoreColor } from '../utils/helpers';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 import Card from '../components/UI/Card';
-import EmptyState from '../components/UI/EmptyState';
 import QuizProgress from '../components/Quiz/QuizProgress';
 import QuizQuestion from '../components/Quiz/QuizQuestion';
 import QuizNavigation from '../components/Quiz/QuizNavigation';
@@ -19,7 +18,7 @@ type QuizAction =
   | { type: 'SELECT_ANSWER'; payload: { questionId: string; answer: string } }
   | { type: 'NEXT_QUESTION' }
   | { type: 'PREV_QUESTION' }
-  | { type: 'FINISH_QUIZ'; payload: { score: number } }
+  | { type: 'FINISH_QUIZ'; payload: { score: number; category: QuizCategory } }
   | { type: 'RESET' };
 
 const initialQuizState: QuizState = {
@@ -49,26 +48,42 @@ function quizReducer(state: QuizState, action: QuizAction): QuizState {
   }
 }
 
+const CORE_ASSESSMENT_NAME = 'Programming Fundamentals'; 
+const CORE_ASSESSMENT_DESCRIPTION = 'Assessment to check foundational technical knowledge and behavioral aptitude.';
+
 export default function SkillsAssessment() {
   const { profile } = useAuth();
-  const [categories, setCategories] = useState<QuizCategory[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<QuizCategory | null>(null);
+  const [assessmentCategory, setAssessmentCategory] = useState<QuizCategory | null>(null);
   const [questions, setQuestions] = useState<QuizQuestionType[]>([]);
   const [quizState, dispatch] = useReducer(quizReducer, initialQuizState);
-  const [userAttempts, setUserAttempts] = useState<QuizAttempt[]>([]);
+  const [quizHistory, setQuizHistory] = useState<QuizAttempt[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  
+  const assessmentCategoryPlaceholder: QuizCategory = {
+    id: assessmentCategory?.id || 'temp-id',
+    name: CORE_ASSESSMENT_NAME,
+    description: CORE_ASSESSMENT_DESCRIPTION,
+  };
+
 
   const fetchInitialData = useCallback(async () => {
+    if (!profile?.id) return;
     try {
-      const [categoriesData, attemptsData] = await Promise.all([
-        quizApi.getCategories(),
-        profile?.id ? quizApi.getUserAttempts(profile.id) : Promise.resolve([]),
-      ]);
-      setCategories(categoriesData);
-      setUserAttempts(attemptsData);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      // 1. Get the ID for the CORE assessment
+      const coreCategory = await quizApi.getCategoryByName(CORE_ASSESSMENT_NAME);
+      setAssessmentCategory(coreCategory);
+      
+      // 2. Fetch all attempts for this specific assessment
+      const attemptsData = await quizApi.getUserAttempts(profile.id);
+      
+      // Filter the attempts to only show history for the single assessment
+      const history = attemptsData.filter(a => a.quiz_categories?.name === CORE_ASSESSMENT_NAME);
+      setQuizHistory(history);
+      
     } catch (error) {
-      toast.error('Failed to load assessment data.');
+      toast.error('Failed to load assessment data. Check if category "Programming Fundamentals" exists.');
+      console.error(error);
     } finally {
       setLoading(false);
     }
@@ -78,37 +93,57 @@ export default function SkillsAssessment() {
     fetchInitialData();
   }, [fetchInitialData]);
 
-  const startQuiz = async (category: QuizCategory) => {
-    const questionsData = await quizApi.getQuestions(category.id);
-    setQuestions(questionsData);
-    setSelectedCategory(category);
-    dispatch({ type: 'START_QUIZ', payload: { questions: questionsData, category } });
+  const startAssessment = async () => {
+    if (!assessmentCategory?.id) {
+        toast.error('Assessment category not found.');
+        return;
+    }
+    setLoading(true);
+    try {
+      // Fetch only questions for the determined category (limited to 30 in API)
+      const questionsData = await quizApi.getQuestions(assessmentCategory.id);
+      
+      if (questionsData.length === 0) {
+        toast.error('No questions available. Please ensure questions are seeded for the assessment category.');
+        return;
+      }
+      
+      setQuestions(questionsData);
+      dispatch({ type: 'START_QUIZ', payload: { questions: questionsData, category: assessmentCategory } });
+    } catch (error) {
+      toast.error('Failed to load assessment questions.');
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const finishQuiz = async () => {
-    if (!profile?.id || !selectedCategory) return;
+    if (!profile?.id || !assessmentCategory) return;
     const score = questions.reduce((acc, q) => acc + (quizState.answers[q.id] === q.correct_answer ? 1 : 0), 0);
     
+    // Use the fetched assessmentCategory ID
     await quizApi.saveAttempt({
       user_id: profile.id,
-      category_id: selectedCategory.id,
+      category_id: assessmentCategory.id, 
       score,
       total_questions: questions.length,
       answers: quizState.answers,
     });
     
-    dispatch({ type: 'FINISH_QUIZ', payload: { score } });
-    fetchInitialData();
+    dispatch({ type: 'FINISH_QUIZ', payload: { score, category: assessmentCategory } });
+    fetchInitialData(); // Reload history
   };
   
   const currentQuestion = questions[quizState.currentQuestion];
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner size="lg" /></div>;
 
+  // Render Quiz Results
   if (quizState.isCompleted) {
     return (
       <QuizResults 
-        category={selectedCategory!} 
+        category={assessmentCategory || assessmentCategoryPlaceholder} 
         score={quizState.score} 
         totalQuestions={questions.length} 
         timeStarted={quizState.timeStarted} 
@@ -119,57 +154,84 @@ export default function SkillsAssessment() {
     );
   }
 
-  if (questions.length > 0 && selectedCategory) {
+  // Render Active Quiz
+  if (questions.length > 0 && assessmentCategory) {
     return (
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-4xl mx-auto">
-          <QuizProgress categoryName={selectedCategory.name} currentQuestion={quizState.currentQuestion} totalQuestions={questions.length} timeStarted={quizState.timeStarted} />
-          <QuizQuestion question={currentQuestion} selectedAnswer={quizState.answers[currentQuestion.id]} onSelectAnswer={answer => dispatch({ type: 'SELECT_ANSWER', payload: { questionId: currentQuestion.id, answer } })} />
-          <QuizNavigation currentQuestion={quizState.currentQuestion} totalQuestions={questions.length} hasAnswer={!!quizState.answers[currentQuestion.id]} onPrevious={() => dispatch({ type: 'PREV_QUESTION' })} onNext={() => quizState.currentQuestion < questions.length - 1 ? dispatch({ type: 'NEXT_QUESTION' }) : finishQuiz()} />
+          <QuizProgress 
+            categoryName={assessmentCategory.name} 
+            currentQuestion={quizState.currentQuestion} 
+            totalQuestions={questions.length} 
+            timeStarted={quizState.timeStarted} 
+          />
+          <QuizQuestion 
+            question={currentQuestion} 
+            selectedAnswer={quizState.answers[currentQuestion.id]} 
+            onSelectAnswer={answer => dispatch({ type: 'SELECT_ANSWER', payload: { questionId: currentQuestion.id, answer } })} 
+          />
+          <QuizNavigation 
+            currentQuestion={quizState.currentQuestion} 
+            totalQuestions={questions.length} 
+            hasAnswer={!!quizState.answers[currentQuestion.id]} 
+            onPrevious={() => dispatch({ type: 'PREV_QUESTION' })} 
+            onNext={() => quizState.currentQuestion < questions.length - 1 ? dispatch({ type: 'NEXT_QUESTION' }) : finishQuiz()} 
+          />
         </div>
       </div>
     );
   }
 
+  // Render Start/History Screen
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md-p-6">
-      <div className="max-w-7xl mx-auto">
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold">Skills Assessment</h1>
-          <p className="text-lg text-gray-600">Test your knowledge and discover your strengths.</p>
-        </header>
-
-        {userAttempts.length > 0 && (
-          <Card className="mb-8">
-            <h2 className="text-xl font-bold mb-4 flex items-center">
-              <Award className="w-6 h-6 text-yellow-600 mr-2" />
-              Your Recent Attempts
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {userAttempts.slice(0, 3).map(attempt => (
-                <div key={attempt.id} className="p-4 bg-gray-50 rounded-lg">
-                  <h3 className="font-medium">{attempt.quiz_categories?.name}</h3>
-                  <div className={`text-sm ${getScoreColor(attempt.score, attempt.total_questions)}`}>
-                    Score: {attempt.score}/{attempt.total_questions}
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-xl w-full">
+          <header className="mb-8 text-center">
+            <div className="flex items-center justify-center mb-4">
+              <Brain className="w-8 h-8 text-purple-600 mr-3" />
+              <h1 className="text-3xl font-bold text-gray-900">Initial Skills Assessment</h1>
+            </div>
+            <p className="text-lg text-gray-600">
+              {CORE_ASSESSMENT_DESCRIPTION}
+            </p>
+          </header>
+          
+          {/* Quiz History Card */}
+          {quizHistory.length > 0 && (
+            <Card className="mb-8 p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                <Award className="w-6 h-6 text-yellow-600 mr-2" />
+                Latest Assessment Score
+              </h2>
+              {quizHistory.slice(0, 1).map(attempt => (
+                <div key={attempt.id} className="p-4 bg-gray-50 rounded-lg flex items-center justify-between">
+                  <div>
+                    <h3 className="font-medium text-gray-900">{CORE_ASSESSMENT_NAME}</h3>
+                    <div className={`text-sm font-semibold ${getScoreColor(attempt.score, attempt.total_questions)}`}>
+                      Score: {attempt.score}/{attempt.total_questions}
+                    </div>
                   </div>
+                  <Button onClick={startAssessment} variant="outline" icon={<RefreshCw className="w-4 h-4" />}>
+                    Retake Test
+                  </Button>
                 </div>
               ))}
-            </div>
-          </Card>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {categories.length > 0 ? categories.map(category => (
-            <Card key={category.id} hover>
-              <h3 className="text-xl font-bold">{category.name}</h3>
-              <p className="text-gray-600 my-4">{category.description}</p>
-              <Button onClick={() => startQuiz(category)} icon={<Play />}>Start Quiz</Button>
             </Card>
-          )) : (
-            <EmptyState icon={Brain} title="No Assessments Available" description="Check back later for new skill assessments." />
           )}
+
+          {/* Start Assessment Card */}
+          <Card hover padding="lg" className="text-center">
+            <div className="flex items-center justify-center text-4xl font-bold text-blue-600 mb-4">
+                <HelpCircle className="w-8 h-8 mr-3" /> {quizHistory.length > 0 ? 'Ready for Retake' : '30 Questions'}
+            </div>
+            <p className="text-gray-700 mb-6">
+              This test is crucial for generating your personalized career path recommendations.
+            </p>
+            <Button onClick={startAssessment} size="lg" icon={<Play />}>
+              {quizHistory.length > 0 ? 'Start Retake' : 'Start Assessment'}
+            </Button>
+          </Card>
         </div>
       </div>
-    </div>
   );
 }

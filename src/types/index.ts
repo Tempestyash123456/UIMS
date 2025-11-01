@@ -98,6 +98,7 @@ export interface FAQ {
   question: string;
   answer: string;
   category: string;
+  tags?: string[];
   view_count: number;
   is_featured: boolean;
 }
@@ -169,4 +170,22 @@ export interface Notification {
   type: 'info' | 'success' | 'warning' | 'error';
   read: boolean;
   created_at: string;
+}
+
+// ⚠️ UPDATED: Added profileLoading
+export interface AuthContextType {
+  user: User | null;
+  profile: Profile | null;
+  loading: boolean;
+  profileLoading: boolean; // <-- New property for profile data load status
+  signUp: (email: string, password: string, fullName: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
+  updateProfile: (updates: Partial<Profile>) => Promise<void>;
+}
+
+export interface AiCareerRecommendation {
+  course_stream: string;
+  prerequisites: string;
+  reasoning: string;
 }
